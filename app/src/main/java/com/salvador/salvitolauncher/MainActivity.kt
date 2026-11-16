@@ -4,11 +4,11 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.graphics.drawable.Drawable
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.AnimatedVisibility
@@ -61,6 +61,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.net.toUri
 import androidx.core.graphics.drawable.toBitmap
 import com.salvador.salvitolauncher.ui.theme.SalvitoLauncherTheme
 import kotlinx.coroutines.Dispatchers
@@ -68,6 +69,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.*
+import kotlin.time.Duration.Companion.milliseconds
 
 enum class AppIconTheme {
     DEFAULT,
@@ -120,14 +122,15 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
-
-    override fun onBackPressed() {
-        // Home screen replacement intercepts back press
-    }
 }
 
 @Composable
 fun IOSHomeScreenContent() {
+    // Intercept back gesture gracefully using AndroidX BackHandler
+    BackHandler {
+        // Home screen replacement intercepts back press
+    }
+
     val context = LocalContext.current
     val configuration = LocalConfiguration.current
     val isTablet = configuration.screenWidthDp >= 600
@@ -412,7 +415,7 @@ fun IOSHomeScreenContent() {
                 Column {
                     TextButton(onClick = {
                         val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                            data = Uri.parse("package:${target.packageName}")
+                            data = "package:${target.packageName}".toUri()
                         }
                         context.startActivity(intent)
                         appInfoTarget = null
@@ -438,7 +441,7 @@ fun IOSHomeScreenContent() {
                     }
                     TextButton(onClick = {
                         val intent = Intent(Intent.ACTION_DELETE).apply {
-                            data = Uri.parse("package:${target.packageName}")
+                            data = "package:${target.packageName}".toUri()
                         }
                         context.startActivity(intent)
                         appInfoTarget = null
@@ -857,7 +860,7 @@ fun IOSLockScreenOverlay(isSpanish: Boolean, onUnlock: () -> Unit) {
             currentTime = timeSdf.format(now)
             val rawDate = dateSdf.format(now)
             currentDate = rawDate.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() }
-            delay(1000)
+            delay(1000.milliseconds)
         }
     }
 
@@ -892,7 +895,7 @@ fun IOSLockScreenOverlay(isSpanish: Boolean, onUnlock: () -> Unit) {
                     fontWeight = FontWeight.SemiBold
                 )
                 Text(
-                    text = if (currentTime.isEmpty()) "9:41" else currentTime,
+                    text = currentTime.ifEmpty { "9:41" },
                     color = Color.White,
                     fontSize = 84.sp,
                     fontWeight = FontWeight.Bold
@@ -1090,7 +1093,7 @@ fun IOSLibraryFolderCard(
                     val bitmap = remember(app.icon) {
                         try {
                             app.icon.toBitmap(width = 80, height = 80).asImageBitmap()
-                        } catch (e: Exception) {
+                        } catch (_: Exception) {
                             null
                         }
                     }
@@ -1228,7 +1231,7 @@ fun StatusBarController(
         while (true) {
             val sdf = SimpleDateFormat("h:mm", Locale.getDefault())
             currentTime = sdf.format(Date())
-            delay(1000)
+            delay(1000.milliseconds)
         }
     }
 
@@ -1240,7 +1243,7 @@ fun StatusBarController(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
-            text = if (currentTime.isEmpty()) "9:41" else currentTime,
+            text = currentTime.ifEmpty { "9:41" },
             color = Color.White,
             fontSize = 15.sp,
             fontWeight = FontWeight.SemiBold,
@@ -1351,7 +1354,7 @@ fun DockAppItem(
         val bitmap = remember(app.icon) {
             try {
                 app.icon.toBitmap(width = 120, height = 120).asImageBitmap()
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 null
             }
         }
@@ -1434,7 +1437,7 @@ fun AppItem(
             val bitmap = remember(app.icon) {
                 try {
                     app.icon.toBitmap(width = 144, height = 144).asImageBitmap()
-                } catch (e: Exception) {
+                } catch (_: Exception) {
                     null
                 }
             }
@@ -1608,7 +1611,7 @@ fun getAppCategory(context: Context, packageName: String, label: String, isSpani
         } else {
             inferCategoryFromLabel(label, packageName, isSpanish)
         }
-    } catch (e: Exception) {
+    } catch (_: Exception) {
         inferCategoryFromLabel(label, packageName, isSpanish)
     }
 }
