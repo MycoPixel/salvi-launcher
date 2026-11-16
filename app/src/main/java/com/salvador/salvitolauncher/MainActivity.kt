@@ -54,8 +54,9 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -126,14 +127,15 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun IOSHomeScreenContent() {
-    // Intercept back gesture gracefully using AndroidX BackHandler
     BackHandler {
         // Home screen replacement intercepts back press
     }
 
     val context = LocalContext.current
-    val configuration = LocalConfiguration.current
-    val isTablet = configuration.screenWidthDp >= 600
+    val windowInfo = LocalWindowInfo.current
+    val density = LocalDensity.current
+    val screenWidthDp = with(density) { windowInfo.containerSize.width.toDp() }
+    val isTablet = screenWidthDp >= 600.dp
     val columnsCount = if (isTablet) 6 else 4
 
     var allApps by remember { mutableStateOf<List<AppInfo>>(emptyList()) }
