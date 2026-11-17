@@ -1,0 +1,53 @@
+package com.salvador.salvitolauncher.ui
+
+import android.content.Context
+import android.text.format.DateFormat
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.State
+import androidx.compose.runtime.produceState
+import com.salvador.salvitolauncher.data.AppCategory
+import kotlinx.coroutines.delay
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+
+/** Elige el texto según el idioma del launcher. */
+fun tr(es: Boolean, spanish: String, english: String): String = if (es) spanish else english
+
+fun categoryName(category: AppCategory, es: Boolean): String = when (category) {
+    AppCategory.GAMES -> tr(es, "Juegos", "Games")
+    AppCategory.SOCIAL -> "Social"
+    AppCategory.ENTERTAINMENT -> tr(es, "Entretenimiento", "Entertainment")
+    AppCategory.PRODUCTIVITY -> tr(es, "Productividad", "Productivity")
+    AppCategory.UTILITIES -> tr(es, "Utilidades", "Utilities")
+}
+
+fun formatClock(context: Context, millis: Long): String {
+    val pattern = if (DateFormat.is24HourFormat(context)) "HH:mm" else "h:mm"
+    return SimpleDateFormat(pattern, Locale.getDefault()).format(Date(millis))
+}
+
+fun formatDay(millis: Long, es: Boolean): String {
+    val locale = Locale.forLanguageTag(if (es) "es" else "en")
+    val pattern = DateFormat.getBestDateTimePattern(locale, "EEEEdMMMM")
+    return SimpleDateFormat(pattern, locale)
+        .format(Date(millis))
+        .replaceFirstChar { it.uppercase(locale) }
+}
+
+fun formatAlarm(millis: Long, es: Boolean): String {
+    val locale = Locale.forLanguageTag(if (es) "es" else "en")
+    val pattern = DateFormat.getBestDateTimePattern(locale, "EEEjm")
+    return SimpleDateFormat(pattern, locale)
+        .format(Date(millis))
+        .replaceFirstChar { it.uppercase(locale) }
+}
+
+/** Hora actual en milisegundos, se refresca cada 15 s. */
+@Composable
+fun rememberNow(): State<Long> = produceState(initialValue = System.currentTimeMillis()) {
+    while (true) {
+        value = System.currentTimeMillis()
+        delay(15_000L)
+    }
+}
