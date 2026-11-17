@@ -1,5 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-    <style name="Theme.SalvitoLauncher" parent="android:Theme.Material.Light.NoActionBar" />
+    <!--
+        Tema "Wallpaper": la ventana es transparente y deja ver el fondo real del sistema.
+        Cuando en Ajustes se elige "Sistema", la app no dibuja nada encima y se ve ese fondo.
+    -->
+    <style name="Theme.SalvitoLauncher" parent="android:Theme.Material.Wallpaper.NoTitleBar">
+        <item name="android:windowShowWallpaper">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+    </style>
 </resources>

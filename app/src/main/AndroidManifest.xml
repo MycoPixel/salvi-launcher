@@ -2,7 +2,14 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <!-- Listar todas las apps instaladas (necesario para un launcher). -->
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" tools:ignore="QueryAllPackagesPermission" />
+    <!-- Sin este permiso, ACTION_DELETE (desinstalar) falla en silencio desde Android 9. -->
+    <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
+    <!-- Mostrar si el Wi-Fi está encendido en el Centro de Control. -->
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <!-- Permite cambiar el brillo del sistema; el usuario lo concede en Ajustes al mover el slider. -->
+    <uses-permission android:name="android.permission.WRITE_SETTINGS" tools:ignore="ProtectedPermissions" />
 
     <application
         android:allowBackup="true"
@@ -15,6 +22,7 @@
         android:theme="@style/Theme.SalvitoLauncher">
         <activity
             android:name=".MainActivity"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|uiMode|density|locale|layoutDirection"
             android:exported="true"
             android:launchMode="singleTask"
             android:stateNotNeeded="true"

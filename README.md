@@ -1,92 +1,75 @@
 # 📱 SalvitoLauncher
 
-**SalvitoLauncher** is a custom Android home screen replacement built using **Kotlin** and **Jetpack Compose**. It accurately mimics the visual aesthetic, fluid interactions, and core features of **iOS (iPhone & iPad)** on Android devices.
+Launcher de Android hecho con **Kotlin** y **Jetpack Compose** que imita el aspecto del home de iOS:
+páginas con grilla de iconos, dock, Biblioteca de apps, modo edición con "jiggle", Centro de Control y
+widgets. Todo lo que se muestra es real: no hay datos de relleno.
 
 ---
 
-## ✨ Features
+## ✨ Funciones
 
-- 📱 **iOS Home Screen & Paged Grid**:
-  - Horizontal page swiping (`HorizontalPager`) with dynamic page indicator dots (`• • o •`).
-  - Adaptive layout: **4 columns** on phones (16 apps/page) and **6 columns** on tablets & foldables (24 apps/page).
-- 🏝️ **Dynamic Island Pill**:
-  - Top-center animated dark pill shape. Tapping expands it to show live charging state (`🔋 88%`) or music playback.
-- ⚡ **Spotlight Search Bar**:
-  - Search bar with live filtering of installed apps and integrated microphone icon.
-- 🔒 **iOS Lock Screen Overlay**:
-  - Authentic lock screen featuring bold clock typography, date display, Flashlight & Camera quick action buttons, and tap/swipe to unlock.
-- 🎛️ **iOS Control Center**:
-  - Tapping status bar icons opens an iOS Control Center with Wi-Fi, Bluetooth, Flashlight, Airplane Mode toggles, plus Brightness and Volume sliders.
-- 🎨 **iOS 18 App Icon Themes**:
-  - Cycle between **Default**, **Dark Icons**, and **Tinted Monochromatic Glass Icons** themes.
-- 🔄 **Smart Stack Widget Carousel**:
-  - Vertical swiping or tapping on the main header widget cycles between 4 live stack cards (*Date/Clock*, *Battery & Storage*, *Reminders*, *Favorite Quote*).
-- 📂 **App Library & Category Folders**:
-  - Right-most page features the iOS App Library categorized into *Games*, *Social*, *Entertainment*, *Productivity*, and *Utilities*.
-  - Tapping a category opens a full-screen frosted glass folder modal (`Modifier.blur`).
-- 💫 **Jiggle Mode (Edit Mode)**:
-  - Long-pressing an app icon triggers the wobble animation with a delete (`-`) badge on each icon.
-- 🎨 **Wallpaper Switcher**:
-  - Double-tapping anywhere on the desktop background cycles between 4 iOS gradient themes (*Classic Deep Blue*, *Sunset Purple*, *Emerald Dark*, *Midnight Dark*).
-- ✏️ **App Hiding & Custom Label Editing**:
-  - Options to **Rename Apps** or **Hide Apps** from the primary grid via the long-press menu.
-- 🇪🇸 **Bilingual Support (Español & English)**:
-  - Full localization support toggleable from Launcher Settings.
-- ⚙️ **Launcher Settings**:
-  - Long-pressing wallpaper background opens Launcher Settings to unhide apps, reset custom app names, or switch language.
+- **Pantalla de inicio paginada**: grilla que se adapta al alto disponible (ya no se cortan filas),
+  4 columnas en teléfono y 6 en tablet, con indicador de páginas.
+- **Dock configurable**: por defecto usa tus apps de teléfono, mensajes, navegador y cámara. Se cambia
+  con *mantener presionado → Añadir / Quitar del dock*.
+- **Biblioteca de apps**: última página, apps agrupadas por categoría. Al tocar una carpeta, el fondo
+  se desenfoca (blur real en Android 12+) y se abre la carpeta encima.
+- **Fondo de pantalla**: 6 degradados, **el fondo del sistema**, o **una foto de tu galería**
+  (Ajustes → Fondo de pantalla).
+- **Ajustes** (mantener presionado en el fondo): fondo, estilo de iconos (normal / oscuro / tintado),
+  idioma, mostrar nombres, isla dinámica, apps ocultas, nombres personalizados y atajo para fijar el
+  launcher como predeterminado. Todo se guarda y sobrevive a reinicios.
+- **Modo edición** (jiggle): botón "−" para quitar de la pantalla de inicio o desinstalar, botón *Listo*.
+- **Menú contextual** por app: info, renombrar, dock, quitar de inicio, desinstalar.
+- **Centro de Control** (tocar la batería o deslizar hacia abajo desde la barra superior):
+  - Linterna, volumen y brillo funcionan de verdad.
+  - Wi-Fi, Bluetooth y modo avión muestran su estado y abren el panel del sistema (Android no deja
+    que una app los active directamente).
+  - El brillo pide el permiso *Modificar ajustes del sistema* la primera vez.
+- **Widgets reales**: fecha/hora y próxima alarma (se cambia tocando o deslizando), batería y
+  almacenamiento libre.
+- **Búsqueda** de apps con resultados en vivo; el micrófono abre el asistente de voz del teléfono.
+- **Pulsar Home** estando en el launcher vuelve a la primera página y cierra lo que esté abierto.
+- La lista de apps se actualiza sola al instalar o desinstalar.
 
----
+## 🛠️ Requisitos
 
-## 🛠️ Project Requirements
+- Min SDK 24 · Target/Compile SDK 37
+- Kotlin 2.x, Jetpack Compose (Material 3, BOM `2026.02.01`)
 
-- **Minimum SDK**: 24 (Android 7.0 Nougat)
-- **Target SDK**: 37 (Android 15)
-- **Language**: Kotlin 2.x
-- **UI Toolkit**: Jetpack Compose with Material 3 & Compose BOM
+## 🚀 Compilar y ejecutar
 
----
-
-## 🚀 Building & Running
-
-1. **Clone the repository**:
-   ```bash
-   git clone https://github.com/your-username/SalvitoLauncher.git
-   cd SalvitoLauncher
-   ```
-
-2. **Build the Debug APK**:
-   ```bash
-   ./gradlew assembleDebug
-   ```
-
-3. **Install on device/emulator**:
-   ```bash
-   ./gradlew installDebug
-   ```
-
-4. **Set as Default Launcher**:
-   - Press the **Home** button on your Android device.
-   - Select **SalvitoLauncher** and tap **Always**.
-
----
-
-## 📂 Project Structure
-
-```
-SalvitoLauncher/
-├── app/
-│   ├── src/main/
-│   │   ├── java/com/salvador/salvitolauncher/
-│   │   │   └── MainActivity.kt       # Entire Compose UI & Launcher logic
-│   │   └── AndroidManifest.xml       # Launcher intent filters & QUERY_ALL_PACKAGES
-│   └── build.gradle.kts              # App dependencies & SDK versions
-├── build.gradle.kts
-├── settings.gradle.kts
-└── README.md
+```bash
+./gradlew assembleDebug
+./gradlew installDebug
 ```
 
----
+Luego pulsa **Home** y elige **SalvitoLauncher → Siempre** (o *Ajustes → Establecer como launcher
+predeterminado*).
 
-## 📄 License
+## 📂 Estructura
 
-This project is open source and available under the [MIT License](LICENSE).
+```
+app/src/main/java/com/salvador/salvitolauncher/
+├── MainActivity.kt            # Activity, barras del sistema, señal de "Home"
+├── data/
+│   ├── Models.kt              # AppInfo, AppCategory, AppIconTheme, WallpaperMode
+│   ├── LauncherSettings.kt    # Ajustes persistentes (SharedPreferences + estado Compose)
+│   ├── AppRepository.kt       # Carga de apps, categorías, dock por defecto
+│   └── WallpaperStorage.kt    # Foto de fondo guardada en almacenamiento privado
+├── system/
+│   └── SystemControls.kt      # Linterna, batería, volumen, brillo, alarma, intents
+└── ui/
+    ├── LauncherHome.kt        # Pantalla principal y overlays
+    ├── AppIcon.kt             # Icono de app (jiggle, filtros de tema)
+    ├── Components.kt          # Barra superior, widgets, búsqueda, dock, menú contextual
+    ├── ControlCenter.kt       # Centro de Control
+    ├── Library.kt             # Biblioteca de apps y carpeta abierta
+    ├── SettingsScreen.kt      # Ajustes
+    ├── Wallpaper.kt           # Fondos
+    └── Formatters.kt          # Textos, fechas e idioma
+```
+
+## 📄 Licencia
+
+Proyecto de código abierto bajo licencia MIT.
