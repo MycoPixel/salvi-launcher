@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -23,6 +24,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -37,6 +39,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -46,42 +49,63 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.salvador.salvitolauncher.data.AppCategory
+import com.salvador.salvitolauncher.data.AppEntry
+import com.salvador.salvitolauncher.data.AppIconTheme
 import com.salvador.salvitolauncher.data.AppInfo
 import com.salvador.salvitolauncher.data.AppRepository
+import com.salvador.salvitolauncher.data.FolderEntry
+import com.salvador.salvitolauncher.data.HomeLayoutOps
 import com.salvador.salvitolauncher.data.LauncherSettings
 import com.salvador.salvitolauncher.data.WallpaperStorage
+import com.salvador.salvitolauncher.system.BadgeState
+import com.salvador.salvitolauncher.system.LockAccessibilityService
+import com.salvador.salvitolauncher.system.WidgetEnvironment
 import com.salvador.salvitolauncher.system.launchApp
 import com.salvador.salvitolauncher.system.openAppInfo
 import com.salvador.salvitolauncher.system.openVoiceAssistant
 import com.salvador.salvitolauncher.system.rememberBatteryState
 import com.salvador.salvitolauncher.system.uninstallApp
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.util.UUID
+import kotlin.math.abs
+import kotlin.math.roundToInt
 
 /**
  * Pantalla principal del launcher.
  *
+ * Páginas del pager: 0 = widgets, 1..n = inicio, última = Biblioteca de apps.
+ *
  * @param homeSignal sube cada vez que el usuario pulsa Home estando ya en el launcher
- *                   (vuelve a la primera página y cierra overlays, como iOS).
+ *                   (vuelve a la primera página del inicio y cierra overlays, como iOS).
  */
 @Composable
-fun LauncherHome(settings: LauncherSettings, homeSignal: Int) {
+fun LauncherHome(settings: LauncherSettings, homeSignal: Int, widgets: WidgetEnvironment) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
     val windowInfo = LocalWindowInfo.current
+    val keyboard = LocalSoftwareKeyboardController.current
+    val searchFocus = remember { FocusRequester() }
     val es = settings.isSpanish
 
     val isTablet = with(density) { windowInfo.containerSize.width.toDp() } >= 600.dp
@@ -91,6 +115,7 @@ fun LauncherHome(settings: LauncherSettings, homeSignal: Int) {
 
     val battery by rememberBatteryState()
     val now by rememberNow()
+    val badgeCounts: Map<String, Int> = if (settings.showBadges) BadgeState.counts else emptyMap()
 
     // ------------------------------------------------------------------ apps instaladas
 
@@ -143,7 +168,8 @@ fun LauncherHome(settings: LauncherSettings, homeSignal: Int) {
 
     var wiggle by remember { mutableStateOf(false) }
     var query by remember { mutableStateOf("") }
-    var openFolder by remember { mutableStateOf<AppCategory?>(null) }
+    // "cat:<CATEGORIA>" = carpeta de la Biblioteca, "user:<id>" = carpeta creada por el usuario
+    var openFolderKey by remember { mutableStateOf<String?>(null) }
     var controlCenterOpen by remember { mutableStateOf(false) }
     var settingsOpen by remember { mutableStateOf(false) }
     var backgroundMenuOpen by remember { mutableStateOf(false) }
@@ -151,6 +177,15 @@ fun LauncherHome(settings: LauncherSettings, homeSignal: Int) {
     var removeApp by remember { mutableStateOf<AppInfo?>(null) }
     var renameApp by remember { mutableStateOf<AppInfo?>(null) }
     var renameText by remember { mutableStateOf("") }
+    var menuFolder by remember { mutableStateOf<FolderCell?>(null) }
+    var renameFolder by remember { mutableStateOf<FolderCell?>(null) }
+    var renameFolderText by remember { mutableStateOf("") }
+
+    // arrastre de iconos (modo edición)
+    var draggingKey by remember { mutableStateOf<String?>(null) }
+    var dragPointer by remember { mutableStateOf(Offset.Zero) } // relativo al área del pager
+    var mergeTargetKey by remember { mutableStateOf<String?>(null) }
+    var areaWidthPx by remember { mutableIntStateOf(0) }
 
     // ------------------------------------------------------------------ listas derivadas
 
@@ -163,8 +198,8 @@ fun LauncherHome(settings: LauncherSettings, homeSignal: Int) {
             .map { app -> labels[app.packageName]?.let { app.copy(label = it) } ?: app }
             .sortedBy { it.label.lowercase() }
     }
+    val byPackage = remember(apps) { apps.associateBy { it.packageName } }
     val dockApps = remember(apps, dockPackages, hidden, dockSize) {
-        val byPackage = apps.associateBy { it.packageName }
         dockPackages
             .filter { it !in hidden }
             .mapNotNull { byPackage[it] }
@@ -174,13 +209,38 @@ fun LauncherHome(settings: LauncherSettings, homeSignal: Int) {
         val inDock = dockApps.map { it.packageName }.toSet()
         apps.filter { it.packageName !in hidden && it.packageName !in inDock }
     }
+
+    // Orden del inicio: lo guardado + las apps nuevas al final. Se persiste solo cuando el usuario cambia algo.
+    val layout = remember(settings.homeLayout, homeApps) {
+        HomeLayoutOps.reconcile(settings.homeLayout, homeApps)
+    }
+    val cells = remember(layout, byPackage) {
+        layout.mapNotNull { entry ->
+            when (entry) {
+                is AppEntry -> byPackage[entry.packageName]?.let { AppCell(it) }
+                is FolderEntry -> FolderCell(entry.id, entry.name, entry.packages.mapNotNull { byPackage[it] })
+            }
+        }
+    }
+
     val searching = query.isNotBlank()
     val searchResults = remember(apps, query) {
         if (query.isBlank()) emptyList()
         else apps.filter { it.label.contains(query.trim(), ignoreCase = true) }
     }
-    val folderApps = remember(apps, openFolder) {
-        openFolder?.let { category -> apps.filter { it.category == category } } ?: emptyList()
+
+    val openFolderInfo: Pair<String, List<AppInfo>>? = remember(openFolderKey, apps, layout, byPackage, es) {
+        val key = openFolderKey
+        when {
+            key == null -> null
+            key.startsWith("cat:") ->
+                AppCategory.entries.firstOrNull { "cat:${it.name}" == key }
+                    ?.let { category -> categoryName(category, es) to apps.filter { it.category == category } }
+            key.startsWith("user:") ->
+                layout.filterIsInstance<FolderEntry>().firstOrNull { "user:${it.id}" == key }
+                    ?.let { folder -> folder.name to folder.packages.mapNotNull { byPackage[it] } }
+            else -> null
+        }
     }
 
     // ------------------------------------------------------------------ paginación adaptable
@@ -190,34 +250,135 @@ fun LauncherHome(settings: LauncherSettings, homeSignal: Int) {
     val rows = if (gridAreaHeightPx == 0) {
         4
     } else {
-        ((with(density) { gridAreaHeightPx.toDp() } + 20.dp) / 104.dp).toInt().coerceIn(2, 6)
+        ((with(density) { gridAreaHeightPx.toDp() } + 20.dp) / HomeCellHeight).toInt().coerceIn(2, 6)
     }
     val pageSize = rows * columns
-    val homePages = remember(homeApps, pageSize) { homeApps.chunked(pageSize) }
-    val pageCount = homePages.size.coerceAtLeast(1) + 1 // +1 = Biblioteca de apps
-    val pagerState = rememberPagerState(pageCount = { pageCount })
+    val cellPages = remember(cells, pageSize) { cells.chunked(pageSize) }
+    val homePageCount = cellPages.size.coerceAtLeast(1)
+    val pageCount = homePageCount + 2 // + página de widgets (izquierda) + Biblioteca (derecha)
+    val pagerState = rememberPagerState(initialPage = 1, pageCount = { pageCount })
+
+    // ------------------------------------------------------------------ arrastrar y soltar
+
+    val hPadPx = with(density) { homeGridPadding(isTablet).toPx() }
+    val cellHeightPx = with(density) { HomeCellHeight.toPx() }
+    val iconPx = with(density) { iconSize.toPx() }
+    val edgePx = with(density) { 36.dp.toPx() }
+    val floatingWidthPx = with(density) { (iconSize + 16.dp).toPx() }
+
+    fun startDrag(cell: HomeCell, indexOnPage: Int, pointerInCell: Offset) {
+        val cellWidth = (areaWidthPx - 2f * hPadPx) / columns
+        val row = indexOnPage / columns
+        val col = indexOnPage % columns
+        dragPointer = Offset(
+            hPadPx + (col + 0.5f) * cellWidth + pointerInCell.x,
+            row * cellHeightPx + pointerInCell.y
+        )
+        draggingKey = cell.key
+        mergeTargetKey = null
+    }
+
+    fun currentDropTarget(): DropTarget? {
+        val pageCells = cellPages.getOrNull(pagerState.currentPage - 1) ?: return null
+        return computeDropTarget(
+            pointer = dragPointer,
+            areaWidth = areaWidthPx.toFloat(),
+            columns = columns,
+            horizontalPadding = hPadPx,
+            cellHeight = cellHeightPx,
+            iconSize = iconPx,
+            itemCount = pageCells.size
+        )
+    }
+
+    fun moveDrag(delta: Offset) {
+        dragPointer += delta
+        val key = draggingKey ?: return
+        val pageCells = cellPages.getOrNull(pagerState.currentPage - 1)
+        val target = currentDropTarget()
+        mergeTargetKey = if (
+            pageCells != null && target != null && target.merge &&
+            key.startsWith("app:") && target.indexOnPage < pageCells.size
+        ) {
+            pageCells[target.indexOnPage].key.takeIf { it != key }
+        } else {
+            null
+        }
+    }
+
+    fun endDrag() {
+        val key = draggingKey
+        val target = currentDropTarget()
+        val settled = abs(pagerState.currentPageOffsetFraction) < 0.1f
+        if (key != null && target != null && settled) {
+            val mergeKey = mergeTargetKey
+            val updated = if (target.merge && mergeKey != null && key.startsWith("app:")) {
+                val targetApp = (cells.firstOrNull { it.key == mergeKey } as? AppCell)?.app
+                HomeLayoutOps.mergeInto(
+                    layout = layout,
+                    draggedKey = key,
+                    targetKey = mergeKey,
+                    newFolderName = targetApp?.let { categoryName(it.category, es) } ?: tr(es, "Carpeta", "Folder"),
+                    newFolderId = UUID.randomUUID().toString().take(8)
+                )
+            } else {
+                HomeLayoutOps.move(layout, key, (pagerState.currentPage - 1) * pageSize + target.indexOnPage)
+            }
+            settings.updateHomeLayout(updated)
+        }
+        draggingKey = null
+        mergeTargetKey = null
+    }
+
+    // Al mantener el dedo en el borde izquierdo/derecho mientras se arrastra, cambia de página.
+    val edgeDirection by remember(edgePx) {
+        derivedStateOf {
+            when {
+                draggingKey == null -> 0
+                dragPointer.x < edgePx -> -1
+                dragPointer.x > areaWidthPx - edgePx -> 1
+                else -> 0
+            }
+        }
+    }
+    LaunchedEffect(edgeDirection, pagerState.currentPage) {
+        if (edgeDirection != 0) {
+            delay(700)
+            val target = pagerState.currentPage + edgeDirection
+            if (target in 1..homePageCount) pagerState.animateScrollToPage(target)
+        }
+    }
 
     // ------------------------------------------------------------------ acciones
 
     val openApp: (AppInfo) -> Unit = { app ->
         if (launchApp(context, app.packageName)) {
             query = ""
-            openFolder = null
+            openFolderKey = null
         }
+    }
+
+    val focusSearch: () -> Unit = {
+        runCatching { searchFocus.requestFocus() }
+        keyboard?.show()
     }
 
     LaunchedEffect(homeSignal) {
         if (homeSignal > 0) {
             wiggle = false
             query = ""
-            openFolder = null
+            openFolderKey = null
             controlCenterOpen = false
             settingsOpen = false
             backgroundMenuOpen = false
             menuApp = null
             removeApp = null
             renameApp = null
-            pagerState.animateScrollToPage(0)
+            menuFolder = null
+            renameFolder = null
+            draggingKey = null
+            mergeTargetKey = null
+            pagerState.animateScrollToPage(1)
         }
     }
 
@@ -226,20 +387,22 @@ fun LauncherHome(settings: LauncherSettings, homeSignal: Int) {
             menuApp != null -> menuApp = null
             removeApp != null -> removeApp = null
             renameApp != null -> renameApp = null
+            menuFolder != null -> menuFolder = null
+            renameFolder != null -> renameFolder = null
             backgroundMenuOpen -> backgroundMenuOpen = false
             settingsOpen -> settingsOpen = false
             controlCenterOpen -> controlCenterOpen = false
-            openFolder != null -> openFolder = null
+            openFolderKey != null -> openFolderKey = null
             wiggle -> wiggle = false
             query.isNotEmpty() -> query = ""
-            pagerState.currentPage != 0 -> scope.launch { pagerState.animateScrollToPage(0) }
+            pagerState.currentPage != 1 -> scope.launch { pagerState.animateScrollToPage(1) }
         }
     }
 
     // El blur se aplica a la capa de ATRÁS (fondo + inicio). Antes se aplicaba al propio overlay,
     // que se desenfocaba a sí mismo y por eso las carpetas "no se veían".
-    val overlayActive = openFolder != null || controlCenterOpen || backgroundMenuOpen ||
-        menuApp != null || removeApp != null
+    val overlayActive = openFolderInfo != null || controlCenterOpen || backgroundMenuOpen ||
+        menuApp != null || removeApp != null || menuFolder != null
     val blurRadius by animateDpAsState(if (overlayActive) 28.dp else 0.dp, label = "blur")
 
     Box(Modifier.fillMaxSize()) {
@@ -260,6 +423,19 @@ fun LauncherHome(settings: LauncherSettings, homeSignal: Int) {
                     .pointerInput(Unit) {
                         detectTapGestures(
                             onTap = { if (wiggle) wiggle = false },
+                            onDoubleTap = {
+                                if (settings.doubleTapLock && !wiggle && !LockAccessibilityService.lockScreen()) {
+                                    Toast.makeText(
+                                        context,
+                                        tr(
+                                            settings.isSpanish,
+                                            "Activa el servicio de bloqueo en Ajustes",
+                                            "Turn on the lock service in Settings"
+                                        ),
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                }
+                            },
                             onLongPress = { if (!wiggle) backgroundMenuOpen = true }
                         )
                     }
@@ -283,7 +459,8 @@ fun LauncherHome(settings: LauncherSettings, homeSignal: Int) {
                         onQueryChange = { query = it },
                         onVoiceClick = { openVoiceAssistant(context) },
                         onSearch = { searchResults.firstOrNull()?.let(openApp) },
-                        es = es
+                        es = es,
+                        focusRequester = searchFocus
                     )
                 }
 
@@ -293,7 +470,10 @@ fun LauncherHome(settings: LauncherSettings, homeSignal: Int) {
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth()
-                        .onSizeChanged { gridAreaHeightPx = it.height }
+                        .onSizeChanged {
+                            gridAreaHeightPx = it.height
+                            areaWidthPx = it.width
+                        }
                 ) {
                     if (searching) {
                         SearchResultsGrid(
@@ -302,34 +482,97 @@ fun LauncherHome(settings: LauncherSettings, homeSignal: Int) {
                             es = es,
                             iconSize = iconSize,
                             iconTheme = settings.iconTheme,
+                            badgeCounts = badgeCounts,
                             onLaunch = openApp,
                             onLongClick = { menuApp = it }
                         )
                     } else {
                         HorizontalPager(
                             state = pagerState,
+                            userScrollEnabled = draggingKey == null,
                             modifier = Modifier.fillMaxSize()
                         ) { page ->
-                            if (page == pageCount - 1) {
-                                AppLibraryPage(
+                            when {
+                                page == 0 -> WidgetsPage(
+                                    settings = settings,
+                                    env = widgets,
+                                    es = es,
+                                    wiggle = wiggle
+                                )
+
+                                page == pageCount - 1 -> AppLibraryPage(
                                     apps = apps,
                                     columns = if (isTablet) 3 else 2,
                                     es = es,
-                                    onFolderClick = { openFolder = it }
+                                    onFolderClick = { openFolderKey = "cat:${it.name}" }
                                 )
-                            } else {
-                                HomeGridPage(
-                                    pageApps = homePages.getOrElse(page) { emptyList() },
+
+                                else -> HomeGridPage(
+                                    cells = cellPages.getOrElse(page - 1) { emptyList() },
                                     columns = columns,
                                     isTablet = isTablet,
                                     iconSize = iconSize,
                                     iconTheme = settings.iconTheme,
                                     showLabels = settings.showLabels,
                                     wiggle = wiggle,
-                                    onLaunch = openApp,
-                                    onLongClick = { menuApp = it },
-                                    onRemoveClick = { removeApp = it }
+                                    badgeCounts = badgeCounts,
+                                    draggingKey = draggingKey,
+                                    mergeTargetKey = mergeTargetKey,
+                                    onOpenApp = openApp,
+                                    onOpenFolder = { openFolderKey = "user:${it.id}" },
+                                    onAppLongClick = { menuApp = it },
+                                    onFolderLongClick = { menuFolder = it },
+                                    onAppRemove = { removeApp = it },
+                                    onFolderRemove = { menuFolder = it },
+                                    onDragStart = { cell, index, pointer -> startDrag(cell, index, pointer) },
+                                    onDragMove = { delta -> moveDrag(delta) },
+                                    onDragEnd = { endDrag() },
+                                    onSwipeDown = focusSearch
                                 )
+                            }
+                        }
+
+                        // Icono que "flota" bajo el dedo mientras se arrastra.
+                        val dragged = draggingKey?.let { key -> cells.firstOrNull { it.key == key } }
+                        if (dragged != null) {
+                            Box(
+                                modifier = Modifier
+                                    .offset {
+                                        IntOffset(
+                                            (dragPointer.x - floatingWidthPx / 2f).roundToInt(),
+                                            (dragPointer.y - iconPx / 2f).roundToInt()
+                                        )
+                                    }
+                                    .graphicsLayer {
+                                        scaleX = 1.1f
+                                        scaleY = 1.1f
+                                        alpha = 0.92f
+                                    }
+                            ) {
+                                when (dragged) {
+                                    is AppCell -> AppIcon(
+                                        app = dragged.app,
+                                        iconTheme = settings.iconTheme,
+                                        showLabel = settings.showLabels,
+                                        wiggle = false,
+                                        iconSize = iconSize,
+                                        onClick = {},
+                                        onLongClick = {},
+                                        onRemoveClick = {}
+                                    )
+
+                                    is FolderCell -> FolderTile(
+                                        name = dragged.name,
+                                        apps = dragged.apps,
+                                        iconTheme = settings.iconTheme,
+                                        showLabel = settings.showLabels,
+                                        wiggle = false,
+                                        iconSize = iconSize,
+                                        onClick = {},
+                                        onLongClick = {},
+                                        onRemoveClick = {}
+                                    )
+                                }
                             }
                         }
                     }
@@ -344,6 +587,7 @@ fun LauncherHome(settings: LauncherSettings, homeSignal: Int) {
                             iconTheme = settings.iconTheme,
                             wiggle = wiggle,
                             isTablet = isTablet,
+                            badgeCounts = badgeCounts,
                             onLaunch = openApp,
                             onLongClick = { menuApp = it },
                             onRemoveClick = { removeApp = it }
@@ -356,9 +600,9 @@ fun LauncherHome(settings: LauncherSettings, homeSignal: Int) {
 
         // ============================================================== overlays (sin blur propio)
 
-        if (openFolder != null) {
+        openFolderInfo?.let { (title, folderApps) ->
             FolderOverlay(
-                title = categoryName(openFolder!!, es),
+                title = title,
                 apps = folderApps,
                 iconTheme = settings.iconTheme,
                 isTablet = isTablet,
@@ -366,7 +610,7 @@ fun LauncherHome(settings: LauncherSettings, homeSignal: Int) {
                 onLaunch = openApp,
                 onLongClick = { menuApp = it },
                 onRemoveClick = { removeApp = it },
-                onDismiss = { openFolder = null }
+                onDismiss = { openFolderKey = null }
             )
         }
 
@@ -389,6 +633,7 @@ fun LauncherHome(settings: LauncherSettings, homeSignal: Int) {
         menuApp?.let { app ->
             val inDock = app.packageName in dockPackages
             val isHidden = app.packageName in hidden
+            val inUserFolder = layout.any { it is FolderEntry && app.packageName in it.packages }
             val items = buildList {
                 add(MenuItem(tr(es, "Editar pantalla de inicio", "Edit Home Screen")) {
                     wiggle = true
@@ -403,6 +648,12 @@ fun LauncherHome(settings: LauncherSettings, homeSignal: Int) {
                     renameApp = app
                     menuApp = null
                 })
+                if (inUserFolder) {
+                    add(MenuItem(tr(es, "Sacar de la carpeta", "Remove from Folder")) {
+                        settings.updateHomeLayout(HomeLayoutOps.removeFromFolder(layout, app.packageName))
+                        menuApp = null
+                    })
+                }
                 if (inDock) {
                     add(MenuItem(tr(es, "Quitar del dock", "Remove from Dock")) {
                         settings.updateDock(dockPackages - app.packageName)
@@ -434,7 +685,7 @@ fun LauncherHome(settings: LauncherSettings, homeSignal: Int) {
             GlassMenu(title = app.label, items = items, onDismiss = { menuApp = null })
         }
 
-        // botón "−" en modo edición
+        // botón "−" sobre una app en modo edición
         removeApp?.let { app ->
             val inDock = app.packageName in dockPackages
             GlassMenu(
@@ -455,6 +706,30 @@ fun LauncherHome(settings: LauncherSettings, homeSignal: Int) {
                     MenuItem(tr(es, "Cancelar", "Cancel")) { removeApp = null }
                 ),
                 onDismiss = { removeApp = null }
+            )
+        }
+
+        // long-press (o "−") sobre una carpeta del usuario
+        menuFolder?.let { folder ->
+            GlassMenu(
+                title = folder.name,
+                items = listOf(
+                    MenuItem(tr(es, "Renombrar carpeta", "Rename Folder")) {
+                        renameFolderText = folder.name
+                        renameFolder = folder
+                        menuFolder = null
+                    },
+                    MenuItem(tr(es, "Editar pantalla de inicio", "Edit Home Screen")) {
+                        wiggle = true
+                        menuFolder = null
+                    },
+                    MenuItem(tr(es, "Disolver carpeta", "Dissolve Folder"), destructive = true) {
+                        settings.updateHomeLayout(HomeLayoutOps.dissolve(layout, folder.id))
+                        menuFolder = null
+                    },
+                    MenuItem(tr(es, "Cancelar", "Cancel")) { menuFolder = null }
+                ),
+                onDismiss = { menuFolder = null }
             )
         }
 
@@ -514,55 +789,46 @@ fun LauncherHome(settings: LauncherSettings, homeSignal: Int) {
             }
         )
     }
-}
 
-// ====================================================================== páginas
-
-@Composable
-private fun HomeGridPage(
-    pageApps: List<AppInfo>,
-    columns: Int,
-    isTablet: Boolean,
-    iconSize: androidx.compose.ui.unit.Dp,
-    iconTheme: com.salvador.salvitolauncher.data.AppIconTheme,
-    showLabels: Boolean,
-    wiggle: Boolean,
-    onLaunch: (AppInfo) -> Unit,
-    onLongClick: (AppInfo) -> Unit,
-    onRemoveClick: (AppInfo) -> Unit
-) {
-    LazyVerticalGrid(
-        columns = GridCells.Fixed(columns),
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = if (isTablet) 32.dp else 12.dp),
-        verticalArrangement = Arrangement.spacedBy(20.dp),
-        userScrollEnabled = false
-    ) {
-        itemsIndexed(pageApps, key = { _, app -> app.packageName }) { _, app ->
-            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
-                AppIcon(
-                    app = app,
-                    iconTheme = iconTheme,
-                    showLabel = showLabels,
-                    wiggle = wiggle,
-                    iconSize = iconSize,
-                    onClick = { onLaunch(app) },
-                    onLongClick = { onLongClick(app) },
-                    onRemoveClick = { onRemoveClick(app) }
+    renameFolder?.let { folder ->
+        AlertDialog(
+            onDismissRequest = { renameFolder = null },
+            title = { Text(tr(es, "Renombrar carpeta", "Rename folder")) },
+            text = {
+                OutlinedTextField(
+                    value = renameFolderText,
+                    onValueChange = { renameFolderText = it },
+                    singleLine = true,
+                    label = { Text(tr(es, "Nombre de la carpeta", "Folder name")) }
                 )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (renameFolderText.isNotBlank()) {
+                        settings.updateHomeLayout(
+                            HomeLayoutOps.renameFolder(layout, folder.id, renameFolderText.trim())
+                        )
+                    }
+                    renameFolder = null
+                }) { Text(tr(es, "Guardar", "Save")) }
+            },
+            dismissButton = {
+                TextButton(onClick = { renameFolder = null }) { Text(tr(es, "Cancelar", "Cancel")) }
             }
-        }
+        )
     }
 }
+
+// ====================================================================== búsqueda
 
 @Composable
 private fun SearchResultsGrid(
     results: List<AppInfo>,
     columns: Int,
     es: Boolean,
-    iconSize: androidx.compose.ui.unit.Dp,
-    iconTheme: com.salvador.salvitolauncher.data.AppIconTheme,
+    iconSize: Dp,
+    iconTheme: AppIconTheme,
+    badgeCounts: Map<String, Int>,
     onLaunch: (AppInfo) -> Unit,
     onLongClick: (AppInfo) -> Unit
 ) {
@@ -592,6 +858,7 @@ private fun SearchResultsGrid(
                     showLabel = true,
                     wiggle = false,
                     iconSize = iconSize,
+                    badge = badgeCounts[app.packageName] ?: 0,
                     onClick = { onLaunch(app) },
                     onLongClick = { onLongClick(app) },
                     onRemoveClick = {}

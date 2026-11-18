@@ -14,9 +14,13 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -94,28 +98,31 @@ private fun iconTileColor(theme: AppIconTheme): Color = when (theme) {
 }
 
 /**
- * Icono de app con nombre opcional. En modo edición (wiggle) tiembla y muestra el botón "−".
+ * Estructura común de un icono del inicio (app o carpeta): se achica al presionar, tiembla en
+ * modo edición con el botón "−", muestra un badge de notificaciones y el nombre debajo.
  * La rotación se lee dentro de graphicsLayer, así que animar no recompone la pantalla.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun AppIcon(
-    app: AppInfo,
-    iconTheme: AppIconTheme,
+private fun IconScaffold(
+    seedKey: String,
+    label: String,
     showLabel: Boolean,
     wiggle: Boolean,
+    badge: Int,
+    iconSize: Dp,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
     onRemoveClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    iconSize: Dp = 60.dp
+    modifier: Modifier,
+    tile: @Composable () -> Unit
 ) {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     val pressScale by animateFloatAsState(if (pressed) 0.88f else 1f, label = "press")
 
     // cada icono tiembla con fase y velocidad distintas, como en iOS
-    val seed = remember(app.packageName) { app.packageName.hashCode() }
+    val seed = remember(seedKey) { seedKey.hashCode() }
     val wiggleAngle: State<Float>? = if (wiggle) {
         rememberInfiniteTransition(label = "wiggle").animateFloat(
             initialValue = if (seed % 2 == 0) -2f else 2f,
@@ -143,35 +150,26 @@ fun AppIcon(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier
                 .fillMaxWidth()
-                .combinedClickable(
-                    interactionSource = interaction,
-                    indication = null,
-                    onClick = { if (!wiggle) onClick() },
-                    onLongClick = onLongClick
+                // En modo edición no hay clics: así el gesto de arrastre del padre recibe el toque.
+                .then(
+                    if (wiggle) {
+                        Modifier
+                    } else {
+                        Modifier.combinedClickable(
+                            interactionSource = interaction,
+                            indication = null,
+                            onClick = onClick,
+                            onLongClick = onLongClick
+                        )
+                    }
                 )
         ) {
-            Box(
-                modifier = Modifier
-                    .size(iconSize)
-                    .clip(RoundedCornerShape(percent = 22))
-                    .background(iconTileColor(iconTheme))
-            ) {
-                val bitmap = app.icon
-                if (bitmap != null) {
-                    Image(
-                        bitmap = bitmap,
-                        contentDescription = app.label,
-                        colorFilter = iconColorFilter(iconTheme),
-                        contentScale = ContentScale.Fit,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
-            }
+            Box(modifier = Modifier.size(iconSize)) { tile() }
 
             if (showLabel) {
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    text = app.label,
+                    text = label,
                     style = TextStyle(
                         color = Color.White,
                         fontSize = 12.sp,
@@ -202,6 +200,134 @@ fun AppIcon(
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Bold
                 )
+            }
+        } else if (badge > 0) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .offset(x = (-2).dp, y = (-4).dp)
+                    .defaultMinSize(minWidth = 20.dp, minHeight = 20.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFFFF3B30))
+                    .padding(horizontal = 5.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = if (badge > 99) "99+" else badge.toString(),
+                    color = Color.White,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1
+                )
+            }
+        }
+    }
+}
+
+/** Icono de una app. */
+@Composable
+fun AppIcon(
+    app: AppInfo,
+    iconTheme: AppIconTheme,
+    showLabel: Boolean,
+    wiggle: Boolean,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+    onRemoveClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    iconSize: Dp = 60.dp,
+    badge: Int = 0
+) {
+    IconScaffold(
+        seedKey = app.packageName,
+        label = app.label,
+        showLabel = showLabel,
+        wiggle = wiggle,
+        badge = badge,
+        iconSize = iconSize,
+        onClick = onClick,
+        onLongClick = onLongClick,
+        onRemoveClick = onRemoveClick,
+        modifier = modifier
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .clip(RoundedCornerShape(percent = 22))
+                .background(iconTileColor(iconTheme))
+        ) {
+            val bitmap = app.icon
+            if (bitmap != null) {
+                Image(
+                    bitmap = bitmap,
+                    contentDescription = app.label,
+                    colorFilter = iconColorFilter(iconTheme),
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+        }
+    }
+}
+
+/** Carpeta creada por el usuario: un cuadro con las primeras 9 apps en miniatura. */
+@Composable
+fun FolderTile(
+    name: String,
+    apps: List<AppInfo>,
+    iconTheme: AppIconTheme,
+    showLabel: Boolean,
+    wiggle: Boolean,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+    onRemoveClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    iconSize: Dp = 60.dp,
+    badge: Int = 0
+) {
+    IconScaffold(
+        seedKey = "folder:$name",
+        label = name,
+        showLabel = showLabel,
+        wiggle = wiggle,
+        badge = badge,
+        iconSize = iconSize,
+        onClick = onClick,
+        onLongClick = onLongClick,
+        onRemoveClick = onRemoveClick,
+        modifier = modifier
+    ) {
+        val gap = 2.dp
+        val mini = (iconSize - gap * 4) / 3
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .clip(RoundedCornerShape(percent = 22))
+                .background(Color.White.copy(alpha = 0.28f))
+                .padding(gap + 1.dp),
+            verticalArrangement = Arrangement.spacedBy(gap)
+        ) {
+            apps.take(9).chunked(3).forEach { rowApps ->
+                Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
+                    rowApps.forEach { app ->
+                        Box(
+                            modifier = Modifier
+                                .size(mini)
+                                .clip(RoundedCornerShape(percent = 24))
+                        ) {
+                            val bitmap = app.icon
+                            if (bitmap != null) {
+                                Image(
+                                    bitmap = bitmap,
+                                    contentDescription = null,
+                                    colorFilter = iconColorFilter(iconTheme),
+                                    contentScale = ContentScale.Fit,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            }
+                        }
+                    }
+                }
             }
         }
     }

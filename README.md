@@ -28,6 +28,14 @@ widgets. Todo lo que se muestra es real: no hay datos de relleno.
   - El brillo pide el permiso *Modificar ajustes del sistema* la primera vez.
 - **Widgets reales**: fecha/hora y próxima alarma (se cambia tocando o deslizando), batería y
   almacenamiento libre.
+- **Arrastrar y carpetas propias**: en modo edición arrastra iconos para reordenarlos (cambian de
+  página al llegar al borde) o suéltalos encima de otro para crear una carpeta; las carpetas se
+  renombran y se disuelven desde su menú.
+- **Widgets de Android reales**: página a la izquierda del inicio, botón "+" para elegir widgets de
+  tus apps (reloj, clima, calendario…); se quitan con "−" en modo edición.
+- **Números de notificaciones** en los iconos (Ajustes → activar; requiere acceso a notificaciones).
+- **Gestos**: deslizar hacia abajo en el inicio abre la búsqueda; doble toque bloquea la pantalla
+  (requiere activar el servicio de accesibilidad "Salvito Launcher", Android 9+).
 - **Búsqueda** de apps con resultados en vivo; el micrófono abre el asistente de voz del teléfono.
 - **Pulsar Home** estando en el launcher vuelve a la primera página y cierra lo que esté abierto.
 - La lista de apps se actualiza sola al instalar o desinstalar.

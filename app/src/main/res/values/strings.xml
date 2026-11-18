@@ -1,3 +1,6 @@
 <resources>
     <string name="app_name">SalvitoLauncher</string>
+    <string name="lock_service_label">SalvitoLauncher: bloquear pantalla</string>
+    <string name="lock_service_description">Permite bloquear el teléfono con doble toque en la pantalla de inicio. No lee ni guarda nada de lo que hay en pantalla.</string>
+    <string name="badge_service_label">SalvitoLauncher: notificaciones</string>
 </resources>

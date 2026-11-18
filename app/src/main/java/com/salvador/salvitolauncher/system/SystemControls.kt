@@ -71,6 +71,14 @@ fun openAirplaneSettings(context: Context): Boolean =
 fun openAndroidSettings(context: Context): Boolean =
     safeStart(context, Intent(Settings.ACTION_SETTINGS))
 
+/** Pantalla donde el usuario concede "Acceso a notificaciones" (para los badges). */
+fun openNotificationAccessSettings(context: Context): Boolean =
+    safeStart(context, Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+
+/** Pantalla de Accesibilidad, donde se activa el servicio de bloqueo con doble toque. */
+fun openAccessibilitySettings(context: Context): Boolean =
+    safeStart(context, Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+
 fun openDefaultLauncherSettings(context: Context): Boolean =
     safeStart(context, Intent(Settings.ACTION_HOME_SETTINGS))
 
