@@ -53,6 +53,60 @@ class LauncherSettings(context: Context) {
     var dockPackages: List<String>? by mutableStateOf(readDock())
         private set
 
+    /** null = todavía no se movió nada: las apps van por orden alfabético. */
+    var homeLayout: List<LayoutEntry>? by mutableStateOf(
+        prefs.getString(KEY_LAYOUT, null)?.let { HomeLayoutOps.fromJson(it) }
+    )
+        private set
+
+    var widgetIds: List<Int> by mutableStateOf(readWidgetIds())
+        private set
+
+    var showBadges by mutableStateOf(prefs.getBoolean(KEY_BADGES, true))
+        private set
+
+    var doubleTapLock by mutableStateOf(prefs.getBoolean(KEY_DOUBLE_TAP_LOCK, false))
+        private set
+
+    fun updateHomeLayout(layout: List<LayoutEntry>) {
+        homeLayout = layout
+        prefs.edit { putString(KEY_LAYOUT, HomeLayoutOps.toJson(layout)) }
+    }
+
+    fun addWidget(appWidgetId: Int) {
+        widgetIds = widgetIds + appWidgetId
+        saveWidgets()
+    }
+
+    fun removeWidget(appWidgetId: Int) {
+        widgetIds = widgetIds - appWidgetId
+        saveWidgets()
+    }
+
+    fun updateShowBadges(value: Boolean) {
+        showBadges = value
+        prefs.edit { putBoolean(KEY_BADGES, value) }
+    }
+
+    fun updateDoubleTapLock(value: Boolean) {
+        doubleTapLock = value
+        prefs.edit { putBoolean(KEY_DOUBLE_TAP_LOCK, value) }
+    }
+
+    private fun saveWidgets() {
+        prefs.edit { putString(KEY_WIDGETS, JSONArray(widgetIds).toString()) }
+    }
+
+    private fun readWidgetIds(): List<Int> {
+        val raw = prefs.getString(KEY_WIDGETS, null) ?: return emptyList()
+        return try {
+            val array = JSONArray(raw)
+            List(array.length()) { array.getInt(it) }
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
     fun updateSpanish(value: Boolean) {
         isSpanish = value
         prefs.edit { putBoolean(KEY_SPANISH, value) }
@@ -169,5 +223,9 @@ class LauncherSettings(context: Context) {
         const val KEY_HIDDEN = "hidden_packages"
         const val KEY_CUSTOM_LABELS = "custom_labels"
         const val KEY_DOCK = "dock_packages"
+        const val KEY_LAYOUT = "home_layout"
+        const val KEY_WIDGETS = "widget_ids"
+        const val KEY_BADGES = "show_badges"
+        const val KEY_DOUBLE_TAP_LOCK = "double_tap_lock"
     }
 }

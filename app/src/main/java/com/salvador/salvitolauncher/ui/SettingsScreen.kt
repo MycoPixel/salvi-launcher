@@ -38,8 +38,12 @@ import com.salvador.salvitolauncher.data.AppIconTheme
 import com.salvador.salvitolauncher.data.AppInfo
 import com.salvador.salvitolauncher.data.LauncherSettings
 import com.salvador.salvitolauncher.data.WallpaperMode
+import com.salvador.salvitolauncher.system.BadgeState
+import com.salvador.salvitolauncher.system.LockAccessibilityService
+import com.salvador.salvitolauncher.system.openAccessibilitySettings
 import com.salvador.salvitolauncher.system.openAndroidSettings
 import com.salvador.salvitolauncher.system.openDefaultLauncherSettings
+import com.salvador.salvitolauncher.system.openNotificationAccessSettings
 
 private val Panel = Color(0xFF2C2C2E)
 private val Accent = Color(0xFF0A84FF)
@@ -141,6 +145,26 @@ fun SettingsScreen(
                 }
                 SwitchRow(tr(es, "Isla dinámica", "Dynamic Island"), settings.showIsland) {
                     settings.updateShowIsland(it)
+                }
+                SwitchRow(tr(es, "Números de notificaciones", "Notification badges"), settings.showBadges) {
+                    settings.updateShowBadges(it)
+                    if (it && !BadgeState.connected) openNotificationAccessSettings(context)
+                }
+                if (settings.showBadges && !BadgeState.connected) {
+                    ActionRow(tr(es, "Conceder acceso a notificaciones", "Grant notification access")) {
+                        openNotificationAccessSettings(context)
+                    }
+                }
+                if (LockAccessibilityService.isSupported) {
+                    SwitchRow(tr(es, "Doble toque para bloquear", "Double tap to lock"), settings.doubleTapLock) {
+                        settings.updateDoubleTapLock(it)
+                        if (it && !LockAccessibilityService.running) openAccessibilitySettings(context)
+                    }
+                    if (settings.doubleTapLock && !LockAccessibilityService.running) {
+                        ActionRow(tr(es, "Activar el servicio de bloqueo", "Turn on the lock service")) {
+                            openAccessibilitySettings(context)
+                        }
+                    }
                 }
             }
 

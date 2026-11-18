@@ -35,6 +35,31 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Números de notificaciones en los iconos (el usuario concede el acceso en Ajustes). -->
+        <service
+            android:name=".system.BadgeNotificationService"
+            android:exported="true"
+            android:label="@string/badge_service_label"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+
+        <!-- Solo para bloquear la pantalla con doble toque (Android 9+). -->
+        <service
+            android:name=".system.LockAccessibilityService"
+            android:exported="true"
+            android:label="@string/lock_service_label"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/lock_accessibility_service" />
+        </service>
     </application>
 
 </manifest>

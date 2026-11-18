@@ -36,6 +36,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -358,6 +360,7 @@ fun SpotlightSearch(
     onVoiceClick: () -> Unit,
     onSearch: () -> Unit,
     es: Boolean,
+    focusRequester: FocusRequester,
     modifier: Modifier = Modifier
 ) {
     Row(
@@ -401,7 +404,9 @@ fun SpotlightSearch(
                 cursorBrush = SolidColor(Color.White),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                 keyboardActions = KeyboardActions(onSearch = { onSearch() }),
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .focusRequester(focusRequester)
             )
         }
         if (query.isNotEmpty()) {
@@ -457,6 +462,7 @@ fun Dock(
     iconTheme: AppIconTheme,
     wiggle: Boolean,
     isTablet: Boolean,
+    badgeCounts: Map<String, Int>,
     onLaunch: (AppInfo) -> Unit,
     onLongClick: (AppInfo) -> Unit,
     onRemoveClick: (AppInfo) -> Unit
@@ -480,6 +486,7 @@ fun Dock(
                     iconTheme = iconTheme,
                     showLabel = false,
                     wiggle = wiggle,
+                    badge = badgeCounts[app.packageName] ?: 0,
                     onClick = { onLaunch(app) },
                     onLongClick = { onLongClick(app) },
                     onRemoveClick = { onRemoveClick(app) }
