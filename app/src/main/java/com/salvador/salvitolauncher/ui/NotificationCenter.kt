@@ -5,6 +5,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -18,9 +19,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
@@ -30,11 +34,19 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.salvador.salvitolauncher.system.BadgeState
+import com.salvador.salvitolauncher.system.NotificationItem
+import com.salvador.salvitolauncher.system.clearAllNotifications
+import com.salvador.salvitolauncher.system.dismissNotificationItem
+import com.salvador.salvitolauncher.system.openNotificationItem
 
 private val NotificationCardBg = Color(0xFF2C2C2E).copy(alpha = 0.85f)
 private val AccentBlue = Color(0xFF0A84FF)
@@ -46,6 +58,8 @@ fun NotificationCenterOverlay(
     onDismiss: () -> Unit,
     onOpenNotificationAccess: () -> Unit
 ) {
+    val context = LocalContext.current
+
     AnimatedVisibility(
         visible = visible,
         enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
@@ -81,6 +95,15 @@ fun NotificationCenterOverlay(
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier.weight(1f)
                     )
+                    if (BadgeState.items.isNotEmpty()) {
+                        TextButton(onClick = { clearAllNotifications() }) {
+                            Text(
+                                text = tr(es, "Borrar todas", "Clear all"),
+                                color = Color.White.copy(alpha = 0.7f),
+                                fontSize = 14.sp
+                            )
+                        }
+                    }
                     TextButton(onClick = onDismiss) {
                         Text(
                             text = tr(es, "Listo", "Done"),
@@ -98,7 +121,13 @@ fun NotificationCenterOverlay(
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     if (!BadgeState.connected) {
-                        NotificationCard {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(20.dp))
+                                .background(NotificationCardBg)
+                                .padding(16.dp)
+                        ) {
                             Text(
                                 text = tr(es, "Acceso a notificaciones no concedido", "Notification access not granted"),
                                 color = Color.White,
@@ -120,7 +149,7 @@ fun NotificationCenterOverlay(
                                 modifier = Modifier.clickable(onClick = onOpenNotificationAccess)
                             )
                         }
-                    } else if (BadgeState.counts.isEmpty()) {
+                    } else if (BadgeState.items.isEmpty()) {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -134,26 +163,17 @@ fun NotificationCenterOverlay(
                             )
                         }
                     } else {
-                        BadgeState.counts.forEach { (pkg, count) ->
-                            NotificationCard {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        text = pkg.substringAfterLast('.').capitalize(),
-                                        color = Color.White,
-                                        fontSize = 15.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        modifier = Modifier.weight(1f)
-                                    )
-                                    Text(
-                                        text = tr(es, "$count pendiente(s)", "$count pending"),
-                                        color = Color.White.copy(alpha = 0.7f),
-                                        fontSize = 12.sp
-                                    )
+                        BadgeState.items.forEach { item ->
+                            NotificationCardItem(
+                                item = item,
+                                onClick = {
+                                    openNotificationItem(item, context)
+                                    onDismiss()
+                                },
+                                onDismissItem = {
+                                    dismissNotificationItem(item.key)
                                 }
-                            }
+                            )
                         }
                     }
                 }
@@ -163,15 +183,71 @@ fun NotificationCenterOverlay(
 }
 
 @Composable
-private fun NotificationCard(content: @Composable () -> Unit) {
+private fun NotificationCardItem(
+    item: NotificationItem,
+    onClick: () -> Unit,
+    onDismissItem: () -> Unit
+) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(20.dp))
             .background(NotificationCardBg)
-            .padding(16.dp)
+            .clickable(onClick = onClick)
+            .padding(14.dp)
     ) {
-        content()
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (item.icon != null) {
+                Image(
+                    bitmap = item.icon.asImageBitmap(),
+                    contentDescription = null,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier
+                        .size(20.dp)
+                        .clip(CircleShape)
+                )
+                Spacer(Modifier.width(8.dp))
+            }
+            Text(
+                text = item.packageName.substringAfterLast('.').capitalize(),
+                color = Color.White.copy(alpha = 0.7f),
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.weight(1f)
+            )
+            Text(
+                text = "✕",
+                color = Color.White.copy(alpha = 0.6f),
+                fontSize = 14.sp,
+                modifier = Modifier
+                    .clip(CircleShape)
+                    .clickable(onClick = onDismissItem)
+                    .padding(horizontal = 6.dp, vertical = 2.dp)
+            )
+        }
+
+        Spacer(Modifier.height(4.dp))
+        Text(
+            text = item.title,
+            color = Color.White,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        if (item.text.isNotBlank()) {
+            Spacer(Modifier.height(2.dp))
+            Text(
+                text = item.text,
+                color = Color.White.copy(alpha = 0.85f),
+                fontSize = 13.sp,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
     }
 }
 

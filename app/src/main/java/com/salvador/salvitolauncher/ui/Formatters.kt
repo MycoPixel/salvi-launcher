@@ -51,3 +51,77 @@ fun rememberNow(): State<Long> = produceState(initialValue = System.currentTimeM
         delay(15_000L)
     }
 }
+
+/** Evaluación rápida de expresiones matemáticas para Spotlight. */
+fun evaluateMathExpression(expr: String): Double? {
+    val clean = expr.trim().replace(" ", "").replace("x", "*").replace("X", "*").replace(",", ".")
+    if (!clean.matches(Regex("""^[\d\.\+\-\*\/\(\)]+$"""))) return null
+    return try {
+        val tokens = clean
+        object {
+            var pos = -1
+            var ch = 0
+
+            fun nextChar() {
+                ch = if (++pos < tokens.length) tokens[pos].code else -1
+            }
+
+            fun eat(charToEat: Int): Boolean {
+                while (ch == ' '.code) nextChar()
+                if (ch == charToEat) {
+                    nextChar()
+                    return true
+                }
+                return false
+            }
+
+            fun parse(): Double {
+                nextChar()
+                val x = parseExpression()
+                if (pos < tokens.length) throw RuntimeException("Unexpected: " + ch.toChar())
+                return x
+            }
+
+            fun parseExpression(): Double {
+                var x = parseTerm()
+                while (true) {
+                    when {
+                        eat('+'.code) -> x += parseTerm()
+                        eat('-'.code) -> x -= parseTerm()
+                        else -> return x
+                    }
+                }
+            }
+
+            fun parseTerm(): Double {
+                var x = parseFactor()
+                while (true) {
+                    when {
+                        eat('*'.code) -> x *= parseFactor()
+                        eat('/'.code) -> x /= parseFactor()
+                        else -> return x
+                    }
+                }
+            }
+
+            fun parseFactor(): Double {
+                if (eat('+'.code)) return parseFactor()
+                if (eat('-'.code)) return -parseFactor()
+                var x: Double
+                val startPos = pos
+                if (eat('('.code)) {
+                    x = parseExpression()
+                    eat(')'.code)
+                } else if ((ch in '0'.code..'9'.code) || ch == '.'.code) {
+                    while ((ch in '0'.code..'9'.code) || ch == '.'.code) nextChar()
+                    x = tokens.substring(startPos, pos).toDouble()
+                } else {
+                    throw RuntimeException("Unexpected: " + ch.toChar())
+                }
+                return x
+            }
+        }.parse()
+    } catch (_: Exception) {
+        null
+    }
+}

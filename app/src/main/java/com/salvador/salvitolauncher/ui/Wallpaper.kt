@@ -9,6 +9,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import com.salvador.salvitolauncher.data.LauncherSettings
 import com.salvador.salvitolauncher.data.WallpaperMode
@@ -25,20 +26,30 @@ val WallpaperPresets = listOf(
 )
 
 /**
- * Fondo de pantalla. En modo SYSTEM no dibuja nada: el tema de la activity usa
- * windowShowWallpaper, así que se ve el fondo real del sistema a través de la ventana.
+ * Fondo de pantalla con efecto Parallax al deslizar páginas.
  */
 @Composable
-fun WallpaperLayer(settings: LauncherSettings, customImage: ImageBitmap?) {
+fun WallpaperLayer(
+    settings: LauncherSettings,
+    customImage: ImageBitmap?,
+    pageOffset: Float = 0f
+) {
     val gradient = WallpaperPresets[settings.gradientIndex.coerceIn(0, WallpaperPresets.lastIndex)].colors
+    val parallaxModifier = Modifier
+        .fillMaxSize()
+        .graphicsLayer {
+            translationX = -pageOffset * 32f
+            scaleX = 1.08f
+            scaleY = 1.08f
+        }
 
     when (settings.wallpaperMode) {
         WallpaperMode.GRADIENT ->
-            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(gradient)))
+            Box(parallaxModifier.background(Brush.verticalGradient(gradient)))
 
         WallpaperMode.CUSTOM ->
             if (customImage != null) {
-                Box(Modifier.fillMaxSize()) {
+                Box(parallaxModifier) {
                     Image(
                         bitmap = customImage,
                         contentDescription = null,
@@ -49,7 +60,7 @@ fun WallpaperLayer(settings: LauncherSettings, customImage: ImageBitmap?) {
                     Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.18f)))
                 }
             } else {
-                Box(Modifier.fillMaxSize().background(Brush.verticalGradient(gradient)))
+                Box(parallaxModifier.background(Brush.verticalGradient(gradient)))
             }
 
         WallpaperMode.SYSTEM ->

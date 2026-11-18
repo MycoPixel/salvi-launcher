@@ -15,6 +15,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -49,6 +50,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -60,11 +62,13 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import androidx.core.net.toUri
 import com.salvador.salvitolauncher.data.AppCategory
 import com.salvador.salvitolauncher.data.AppEntry
 import com.salvador.salvitolauncher.data.AppIconTheme
@@ -177,6 +181,7 @@ fun LauncherHome(settings: LauncherSettings, homeSignal: Int, widgets: WidgetEnv
     var openFolderKey by remember { mutableStateOf<String?>(null) }
     var controlCenterOpen by remember { mutableStateOf(false) }
     var notificationCenterOpen by remember { mutableStateOf(false) }
+    var standByOpen by remember { mutableStateOf(false) }
     var settingsOpen by remember { mutableStateOf(false) }
     var backgroundMenuOpen by remember { mutableStateOf(false) }
     var menuApp by remember { mutableStateOf<AppInfo?>(null) }
@@ -415,6 +420,7 @@ fun LauncherHome(settings: LauncherSettings, homeSignal: Int, widgets: WidgetEnv
             settingsOpen -> settingsOpen = false
             controlCenterOpen -> controlCenterOpen = false
             notificationCenterOpen -> notificationCenterOpen = false
+            standByOpen -> standByOpen = false
             openFolderKey != null -> openFolderKey = null
             wiggle -> wiggle = false
             query.isNotEmpty() -> query = ""
@@ -422,10 +428,16 @@ fun LauncherHome(settings: LauncherSettings, homeSignal: Int, widgets: WidgetEnv
         }
     }
 
+    val pageOffset by remember {
+        derivedStateOf {
+            (pagerState.currentPage - 1) + pagerState.currentPageOffsetFraction
+        }
+    }
+
     // El blur se aplica a la capa de ATRÁS (fondo + inicio). Antes se aplicaba al propio overlay,
     // que se desenfocaba a sí mismo y por eso las carpetas "no se veían".
     val overlayActive = openFolderInfo != null || controlCenterOpen || notificationCenterOpen || backgroundMenuOpen ||
-        menuApp != null || removeApp != null || menuFolder != null
+        standByOpen || menuApp != null || removeApp != null || menuFolder != null
     val blurRadius by animateDpAsState(if (overlayActive) 28.dp else 0.dp, label = "blur")
 
     Box(Modifier.fillMaxSize()) {
@@ -436,7 +448,7 @@ fun LauncherHome(settings: LauncherSettings, homeSignal: Int, widgets: WidgetEnv
                 .fillMaxSize()
                 .then(if (blurRadius > 0.dp) Modifier.blur(blurRadius) else Modifier)
         ) {
-            WallpaperLayer(settings, customWallpaper)
+            WallpaperLayer(settings, customWallpaper, pageOffset)
 
             Column(
                 modifier = Modifier
@@ -501,6 +513,7 @@ fun LauncherHome(settings: LauncherSettings, homeSignal: Int, widgets: WidgetEnv
                 ) {
                     if (searching) {
                         SearchResultsGrid(
+                            query = query,
                             results = searchResults,
                             columns = columns,
                             es = es,
@@ -805,6 +818,10 @@ fun LauncherHome(settings: LauncherSettings, homeSignal: Int, widgets: WidgetEnv
                         wiggle = true
                         backgroundMenuOpen = false
                     },
+                    MenuItem(tr(es, "Modo StandBy (iOS 17)", "StandBy Mode (iOS 17)")) {
+                        backgroundMenuOpen = false
+                        standByOpen = true
+                    },
                     MenuItem(tr(es, "Fondo de pantalla y ajustes", "Wallpaper & Settings")) {
                         backgroundMenuOpen = false
                         settingsOpen = true
@@ -814,6 +831,14 @@ fun LauncherHome(settings: LauncherSettings, homeSignal: Int, widgets: WidgetEnv
                 onDismiss = { backgroundMenuOpen = false }
             )
         }
+
+        StandByModeOverlay(
+            visible = standByOpen,
+            es = es,
+            battery = battery,
+            now = now,
+            onDismiss = { standByOpen = false }
+        )
 
         if (settingsOpen) {
             SettingsScreen(
@@ -886,6 +911,7 @@ fun LauncherHome(settings: LauncherSettings, homeSignal: Int, widgets: WidgetEnv
 
 @Composable
 private fun SearchResultsGrid(
+    query: String,
     results: List<AppInfo>,
     columns: Int,
     es: Boolean,
@@ -895,37 +921,89 @@ private fun SearchResultsGrid(
     onLaunch: (AppInfo) -> Unit,
     onLongClick: (AppInfo) -> Unit
 ) {
-    if (results.isEmpty()) {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
-            Text(
-                text = tr(es, "Sin resultados", "No results"),
-                color = Color.White.copy(alpha = 0.7f),
-                fontSize = 16.sp,
-                modifier = Modifier.padding(top = 32.dp)
-            )
-        }
-        return
-    }
-    LazyVerticalGrid(
-        columns = GridCells.Fixed(columns),
+    val context = LocalContext.current
+    val mathResult = remember(query) { evaluateMathExpression(query) }
+
+    Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(20.dp)
+            .padding(horizontal = 16.dp)
     ) {
-        itemsIndexed(results, key = { _, app -> app.packageName }) { _, app ->
-            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
-                AppIcon(
-                    app = app,
-                    iconTheme = iconTheme,
-                    showLabel = true,
-                    wiggle = false,
-                    iconSize = iconSize,
-                    badge = badgeCounts[app.packageName] ?: 0,
-                    onClick = { onLaunch(app) },
-                    onLongClick = { onLongClick(app) },
-                    onRemoveClick = {}
+        if (mathResult != null) {
+            val formattedResult = if (mathResult % 1.0 == 0.0) mathResult.toLong().toString() else mathResult.toString()
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 12.dp)
+                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(20.dp))
+                    .background(Color(0xFF2C2C2E).copy(alpha = 0.85f))
+                    .padding(16.dp)
+            ) {
+                Text(
+                    text = tr(es, "Calculadora", "Calculator"),
+                    color = Color.White.copy(alpha = 0.6f),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold
                 )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = "= $formattedResult",
+                    color = Color.White,
+                    fontSize = 28.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+
+        if (results.isEmpty() && mathResult == null) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 32.dp),
+                contentAlignment = Alignment.TopCenter
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        text = tr(es, "Sin resultados para '$query'", "No results for '$query'"),
+                        color = Color.White.copy(alpha = 0.7f),
+                        fontSize = 16.sp
+                    )
+                    Spacer(Modifier.height(16.dp))
+                    TextButton(onClick = {
+                        val webIntent = Intent(Intent.ACTION_VIEW, "https://www.google.com/search?q=${java.net.URLEncoder.encode(query, "UTF-8")}".toUri())
+                        webIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        runCatching { context.startActivity(webIntent) }
+                    }) {
+                        Text(
+                            text = tr(es, "🔍 Buscar en Google", "🔍 Search on Google"),
+                            color = Color(0xFF0A84FF),
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+        } else if (results.isNotEmpty()) {
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(columns),
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(20.dp)
+            ) {
+                itemsIndexed(results, key = { _, app -> app.packageName }) { _, app ->
+                    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
+                        AppIcon(
+                            app = app,
+                            iconTheme = iconTheme,
+                            showLabel = true,
+                            wiggle = false,
+                            iconSize = iconSize,
+                            badge = badgeCounts[app.packageName] ?: 0,
+                            onClick = { onLaunch(app) },
+                            onLongClick = { onLongClick(app) },
+                            onRemoveClick = {}
+                        )
+                    }
+                }
             }
         }
     }
