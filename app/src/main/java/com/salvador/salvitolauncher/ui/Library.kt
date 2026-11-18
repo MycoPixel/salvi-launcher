@@ -44,6 +44,7 @@ fun AppLibraryPage(
     apps: List<AppInfo>,
     columns: Int,
     es: Boolean,
+    onLaunchApp: (AppInfo) -> Unit,
     onFolderClick: (AppCategory) -> Unit
 ) {
     val groups = remember(apps) {
@@ -74,6 +75,7 @@ fun AppLibraryPage(
                 LibraryFolderCard(
                     name = categoryName(category, es),
                     apps = categoryApps,
+                    onLaunchApp = onLaunchApp,
                     onClick = { onFolderClick(category) }
                 )
             }
@@ -82,7 +84,12 @@ fun AppLibraryPage(
 }
 
 @Composable
-private fun LibraryFolderCard(name: String, apps: List<AppInfo>, onClick: () -> Unit) {
+private fun LibraryFolderCard(
+    name: String,
+    apps: List<AppInfo>,
+    onLaunchApp: (AppInfo) -> Unit,
+    onClick: () -> Unit
+) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -96,7 +103,9 @@ private fun LibraryFolderCard(name: String, apps: List<AppInfo>, onClick: () -> 
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             apps.take(4).chunked(2).forEach { row ->
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    row.forEach { app -> MiniIcon(app) }
+                    row.forEach { app ->
+                        MiniIcon(app = app, onClick = { onLaunchApp(app) })
+                    }
                 }
             }
         }
@@ -112,12 +121,13 @@ private fun LibraryFolderCard(name: String, apps: List<AppInfo>, onClick: () -> 
 }
 
 @Composable
-private fun MiniIcon(app: AppInfo) {
+private fun MiniIcon(app: AppInfo, onClick: () -> Unit) {
     Box(
         modifier = Modifier
             .size(44.dp)
             .clip(RoundedCornerShape(percent = 22))
             .background(Color.White.copy(alpha = 0.12f))
+            .clickable(onClick = onClick)
     ) {
         val bitmap = app.icon
         if (bitmap != null) {

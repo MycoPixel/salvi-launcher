@@ -17,7 +17,7 @@ object AppRepository {
     private const val ICON_PX = 192
 
     /** Debe llamarse desde un hilo de fondo (convierte todos los iconos a bitmap). */
-    fun loadApps(context: Context): List<AppInfo> {
+    fun loadApps(context: Context, iconPackPackage: String? = null): List<AppInfo> {
         val pm = context.packageManager
         val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
 
@@ -29,10 +29,17 @@ object AppRepository {
             .map { info ->
                 val pkg = info.activityInfo.packageName
                 val label = info.loadLabel(pm).toString()
+                val defaultDrawable = info.loadIcon(pm)
+                val icon = if (!iconPackPackage.isNullOrEmpty()) {
+                    IconPackManager.loadAppIcon(context, iconPackPackage, pkg, pm, defaultDrawable)
+                        ?: drawableToBitmap(defaultDrawable)
+                } else {
+                    drawableToBitmap(defaultDrawable)
+                }
                 AppInfo(
                     packageName = pkg,
                     label = label,
-                    icon = drawableToBitmap(info.loadIcon(pm)),
+                    icon = icon,
                     category = categorize(context, pkg, label)
                 )
             }

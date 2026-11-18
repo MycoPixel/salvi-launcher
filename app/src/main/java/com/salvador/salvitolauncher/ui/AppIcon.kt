@@ -10,6 +10,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -21,6 +22,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -37,6 +39,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
@@ -65,36 +68,57 @@ private val DarkIconFilter = ColorFilter.colorMatrix(
     )
 )
 
-/** Pasa el icono a escala de grises y lo tiñe de azul (estilo iOS "tinted"). */
-private val TintedIconFilter = run {
+private fun createTintedFilter(colorLong: Long): ColorFilter {
+    val color = Color(colorLong)
+    val r = color.red * 1.3f
+    val g = color.green * 1.3f
+    val b = color.blue * 1.3f
     val lr = 0.2126f
     val lg = 0.7152f
     val lb = 0.0722f
-    val tr = 0.62f * 1.3f
-    val tg = 0.78f * 1.3f
-    val tb = 1.0f * 1.3f
-    ColorFilter.colorMatrix(
+    return ColorFilter.colorMatrix(
         ColorMatrix(
             floatArrayOf(
-                lr * tr, lg * tr, lb * tr, 0f, 0f,
-                lr * tg, lg * tg, lb * tg, 0f, 0f,
-                lr * tb, lg * tb, lb * tb, 0f, 0f,
+                lr * r, lg * r, lb * r, 0f, 0f,
+                lr * g, lg * g, lb * g, 0f, 0f,
+                lr * b, lg * b, lb * b, 0f, 0f,
                 0f, 0f, 0f, 1f, 0f
             )
         )
     )
 }
 
-fun iconColorFilter(theme: AppIconTheme): ColorFilter? = when (theme) {
-    AppIconTheme.DEFAULT -> null
-    AppIconTheme.DARK -> DarkIconFilter
-    AppIconTheme.TINTED -> TintedIconFilter
+private val LiquidGlassIconFilter = run {
+    val lr = 0.2126f
+    val lg = 0.7152f
+    val lb = 0.0722f
+    val tr = 1.05f
+    val tg = 1.10f
+    val tb = 1.20f
+    ColorFilter.colorMatrix(
+        ColorMatrix(
+            floatArrayOf(
+                lr * tr, lg * tr, lb * tr, 0f, 12f,
+                lr * tg, lg * tg, lb * tg, 0f, 12f,
+                lr * tb, lg * tb, lb * tb, 0f, 20f,
+                0f, 0f, 0f, 1f, 0f
+            )
+        )
+    )
 }
 
-private fun iconTileColor(theme: AppIconTheme): Color = when (theme) {
+fun iconColorFilter(theme: AppIconTheme, tintColor: Long = 0xFF3B82F6L): ColorFilter? = when (theme) {
+    AppIconTheme.DEFAULT -> null
+    AppIconTheme.DARK -> DarkIconFilter
+    AppIconTheme.TINTED -> createTintedFilter(tintColor)
+    AppIconTheme.LIQUID_GLASS -> LiquidGlassIconFilter
+}
+
+private fun iconTileColor(theme: AppIconTheme, tintColor: Long = 0xFF3B82F6L): Color = when (theme) {
     AppIconTheme.DEFAULT -> Color.White.copy(alpha = 0.12f)
     AppIconTheme.DARK -> Color(0xFF1C1C1E)
-    AppIconTheme.TINTED -> Color(0xFF3B82F6).copy(alpha = 0.35f)
+    AppIconTheme.TINTED -> Color(tintColor).copy(alpha = 0.35f)
+    AppIconTheme.LIQUID_GLASS -> Color.White.copy(alpha = 0.25f)
 }
 
 /**
@@ -110,6 +134,7 @@ private fun IconScaffold(
     showLabel: Boolean,
     wiggle: Boolean,
     badge: Int,
+    isLocked: Boolean,
     iconSize: Dp,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
@@ -201,6 +226,21 @@ private fun IconScaffold(
                     fontWeight = FontWeight.Bold
                 )
             }
+        } else if (isLocked) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .offset(x = 2.dp, y = (-4).dp)
+                    .size(20.dp)
+                    .clip(CircleShape)
+                    .background(Color.Black.copy(alpha = 0.70f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "🔒",
+                    fontSize = 10.sp
+                )
+            }
         } else if (badge > 0) {
             Box(
                 modifier = Modifier
@@ -236,7 +276,9 @@ fun AppIcon(
     onRemoveClick: () -> Unit,
     modifier: Modifier = Modifier,
     iconSize: Dp = 60.dp,
-    badge: Int = 0
+    badge: Int = 0,
+    isLocked: Boolean = false,
+    customTintColor: Long = 0xFF3B82F6L
 ) {
     IconScaffold(
         seedKey = app.packageName,
@@ -244,26 +286,69 @@ fun AppIcon(
         showLabel = showLabel,
         wiggle = wiggle,
         badge = badge,
+        isLocked = isLocked,
         iconSize = iconSize,
         onClick = onClick,
         onLongClick = onLongClick,
         onRemoveClick = onRemoveClick,
         modifier = modifier
     ) {
-        Box(
-            modifier = Modifier
+        val shape = RoundedCornerShape(percent = 22)
+        val glassModifier = if (iconTheme == AppIconTheme.LIQUID_GLASS) {
+            Modifier
                 .fillMaxSize()
-                .clip(RoundedCornerShape(percent = 22))
-                .background(iconTileColor(iconTheme))
-        ) {
+                .clip(shape)
+                .background(
+                    Brush.verticalGradient(
+                        listOf(
+                            Color.White.copy(alpha = 0.40f),
+                            Color.White.copy(alpha = 0.12f)
+                        )
+                    )
+                )
+                .border(
+                    width = 1.dp,
+                    brush = Brush.verticalGradient(
+                        listOf(
+                            Color.White.copy(alpha = 0.85f),
+                            Color.White.copy(alpha = 0.20f)
+                        )
+                    ),
+                    shape = shape
+                )
+        } else {
+            Modifier
+                .fillMaxSize()
+                .clip(shape)
+                .background(iconTileColor(iconTheme, customTintColor))
+        }
+
+        Box(modifier = glassModifier) {
             val bitmap = app.icon
             if (bitmap != null) {
                 Image(
                     bitmap = bitmap,
                     contentDescription = app.label,
-                    colorFilter = iconColorFilter(iconTheme),
+                    colorFilter = iconColorFilter(iconTheme, customTintColor),
                     contentScale = ContentScale.Fit,
                     modifier = Modifier.fillMaxSize()
+                )
+            }
+            if (iconTheme == AppIconTheme.LIQUID_GLASS) {
+                // Brillo superior líquido (glossy liquid sheen)
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .fillMaxHeight(0.46f)
+                        .clip(RoundedCornerShape(topStartPercent = 22, topEndPercent = 22))
+                        .background(
+                            Brush.verticalGradient(
+                                listOf(
+                                    Color.White.copy(alpha = 0.35f),
+                                    Color.White.copy(alpha = 0.02f)
+                                )
+                            )
+                        )
                 )
             }
         }
@@ -283,7 +368,8 @@ fun FolderTile(
     onRemoveClick: () -> Unit,
     modifier: Modifier = Modifier,
     iconSize: Dp = 60.dp,
-    badge: Int = 0
+    badge: Int = 0,
+    customTintColor: Long = 0xFF3B82F6L
 ) {
     IconScaffold(
         seedKey = "folder:$name",
@@ -291,6 +377,7 @@ fun FolderTile(
         showLabel = showLabel,
         wiggle = wiggle,
         badge = badge,
+        isLocked = false,
         iconSize = iconSize,
         onClick = onClick,
         onLongClick = onLongClick,
@@ -299,12 +386,40 @@ fun FolderTile(
     ) {
         val gap = 2.dp
         val mini = (iconSize - gap * 4) / 3
-        Column(
-            modifier = Modifier
+        val shape = RoundedCornerShape(percent = 22)
+        val containerModifier = if (iconTheme == AppIconTheme.LIQUID_GLASS) {
+            Modifier
                 .fillMaxSize()
-                .clip(RoundedCornerShape(percent = 22))
+                .clip(shape)
+                .background(
+                    Brush.verticalGradient(
+                        listOf(
+                            Color.White.copy(alpha = 0.42f),
+                            Color.White.copy(alpha = 0.18f)
+                        )
+                    )
+                )
+                .border(
+                    width = 1.dp,
+                    brush = Brush.verticalGradient(
+                        listOf(
+                            Color.White.copy(alpha = 0.90f),
+                            Color.White.copy(alpha = 0.25f)
+                        )
+                    ),
+                    shape = shape
+                )
+                .padding(gap + 1.dp)
+        } else {
+            Modifier
+                .fillMaxSize()
+                .clip(shape)
                 .background(Color.White.copy(alpha = 0.28f))
-                .padding(gap + 1.dp),
+                .padding(gap + 1.dp)
+        }
+
+        Column(
+            modifier = containerModifier,
             verticalArrangement = Arrangement.spacedBy(gap)
         ) {
             apps.take(9).chunked(3).forEach { rowApps ->
@@ -320,7 +435,7 @@ fun FolderTile(
                                 Image(
                                     bitmap = bitmap,
                                     contentDescription = null,
-                                    colorFilter = iconColorFilter(iconTheme),
+                                    colorFilter = iconColorFilter(iconTheme, customTintColor),
                                     contentScale = ContentScale.Fit,
                                     modifier = Modifier.fillMaxSize()
                                 )

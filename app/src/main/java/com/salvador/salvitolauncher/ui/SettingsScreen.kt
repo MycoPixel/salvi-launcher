@@ -1,5 +1,6 @@
 package com.salvador.salvitolauncher.ui
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -20,22 +21,28 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.salvador.salvitolauncher.data.AppIconTheme
 import com.salvador.salvitolauncher.data.AppInfo
+import com.salvador.salvitolauncher.data.IconPackManager
 import com.salvador.salvitolauncher.data.LauncherSettings
 import com.salvador.salvitolauncher.data.WallpaperMode
 import com.salvador.salvitolauncher.system.BadgeState
@@ -124,15 +131,122 @@ fun SettingsScreen(
 
             // ------------------------------------------------------------ iconos
             SectionTitle(tr(es, "Estilo de iconos", "Icon style"))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                ThemeChip(tr(es, "Normal", "Default"), settings.iconTheme == AppIconTheme.DEFAULT, Modifier.weight(1f)) {
-                    settings.updateIconTheme(AppIconTheme.DEFAULT)
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    ThemeChip(tr(es, "Normal", "Default"), settings.iconTheme == AppIconTheme.DEFAULT, Modifier.weight(1f)) {
+                        settings.updateIconTheme(AppIconTheme.DEFAULT)
+                    }
+                    ThemeChip(tr(es, "Oscuro", "Dark"), settings.iconTheme == AppIconTheme.DARK, Modifier.weight(1f)) {
+                        settings.updateIconTheme(AppIconTheme.DARK)
+                    }
                 }
-                ThemeChip(tr(es, "Oscuro", "Dark"), settings.iconTheme == AppIconTheme.DARK, Modifier.weight(1f)) {
-                    settings.updateIconTheme(AppIconTheme.DARK)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    ThemeChip(tr(es, "Tintado", "Tinted"), settings.iconTheme == AppIconTheme.TINTED, Modifier.weight(1f)) {
+                        settings.updateIconTheme(AppIconTheme.TINTED)
+                    }
+                    ThemeChip("Liquid Glass", settings.iconTheme == AppIconTheme.LIQUID_GLASS, Modifier.weight(1f)) {
+                        settings.updateIconTheme(AppIconTheme.LIQUID_GLASS)
+                    }
                 }
-                ThemeChip(tr(es, "Tintado", "Tinted"), settings.iconTheme == AppIconTheme.TINTED, Modifier.weight(1f)) {
-                    settings.updateIconTheme(AppIconTheme.TINTED)
+
+                if (settings.iconTheme == AppIconTheme.TINTED) {
+                    val colors = listOf(
+                        0xFF3B82F6L to "Azul",
+                        0xFF8B5CF6L to "Púrpura",
+                        0xFFEC4899L to "Rosa",
+                        0xFFEF4444L to "Rojo",
+                        0xFFF97316L to "Naranja",
+                        0xFF10B981L to "Verde",
+                        0xFF06B6D4L to "Cian",
+                        0xFFEAB308L to "Dorado"
+                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 4.dp)
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        colors.forEach { (colorValue, _) ->
+                            val selected = settings.customTintColor == colorValue
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(Color(colorValue))
+                                    .border(
+                                        width = if (selected) 3.dp else 0.dp,
+                                        color = if (selected) Color.White else Color.Transparent,
+                                        shape = RoundedCornerShape(10.dp)
+                                    )
+                                    .clickable { settings.updateCustomTintColor(colorValue) }
+                            )
+                        }
+                    }
+                }
+            }
+
+            // ------------------------------------------------------------ paquete de iconos (Play Store)
+            SectionTitle(tr(es, "Paquete de iconos (Play Store)", "Icon pack (Play Store)"))
+            val iconPacks = remember(context) { IconPackManager.getAvailableIconPacks(context) }
+            SettingsCard {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { settings.updateIconPackPackage(null) }
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = tr(es, "Predeterminado (Sistema)", "Default (System)"),
+                        color = Color.White,
+                        fontSize = 16.sp,
+                        modifier = Modifier.weight(1f)
+                    )
+                    RadioButton(
+                        selected = settings.iconPackPackage == null,
+                        onClick = { settings.updateIconPackPackage(null) },
+                        colors = RadioButtonDefaults.colors(selectedColor = Accent)
+                    )
+                }
+
+                iconPacks.forEach { pack ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { settings.updateIconPackPackage(pack.packageName) }
+                            .padding(horizontal = 16.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (pack.icon != null) {
+                            Image(
+                                bitmap = pack.icon,
+                                contentDescription = pack.label,
+                                contentScale = ContentScale.Fit,
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                            )
+                            Spacer(Modifier.width(12.dp))
+                        }
+                        Text(
+                            text = pack.label,
+                            color = Color.White,
+                            fontSize = 16.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f)
+                        )
+                        RadioButton(
+                            selected = settings.iconPackPackage == pack.packageName,
+                            onClick = { settings.updateIconPackPackage(pack.packageName) },
+                            colors = RadioButtonDefaults.colors(selectedColor = Accent)
+                        )
+                    }
+                }
+
+                ActionRow(tr(es, "Descargar paquetes de iconos de Play Store", "Download icon packs from Play Store")) {
+                    IconPackManager.openPlayStoreIconPacks(context)
                 }
             }
 
@@ -142,6 +256,9 @@ fun SettingsScreen(
                 SwitchRow(tr(es, "Español", "Spanish"), es) { settings.updateSpanish(it) }
                 SwitchRow(tr(es, "Mostrar nombres de apps", "Show app names"), settings.showLabels) {
                     settings.updateShowLabels(it)
+                }
+                SwitchRow(tr(es, "Iconos grandes (iOS 18)", "Large icons (iOS 18)"), settings.useLargeIcons) {
+                    settings.updateUseLargeIcons(it)
                 }
                 SwitchRow(tr(es, "Isla dinámica", "Dynamic Island"), settings.showIsland) {
                     settings.updateShowIsland(it)
@@ -163,6 +280,33 @@ fun SettingsScreen(
                     if (settings.doubleTapLock && !LockAccessibilityService.running) {
                         ActionRow(tr(es, "Activar el servicio de bloqueo", "Turn on the lock service")) {
                             openAccessibilitySettings(context)
+                        }
+                    }
+                }
+            }
+
+            // ------------------------------------------------------------ apps bloqueadas con huella
+            if (settings.lockedPackages.isNotEmpty()) {
+                SectionTitle(tr(es, "Apps protegidas con Huella / PIN", "Apps locked with Biometrics / PIN"))
+                SettingsCard {
+                    settings.lockedPackages.sorted().forEach { pkg ->
+                        val label = allApps.firstOrNull { it.packageName == pkg }?.label ?: pkg
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "🔒  $label",
+                                color = Color.White,
+                                fontSize = 15.sp,
+                                maxLines = 1,
+                                modifier = Modifier.weight(1f)
+                            )
+                            TextButton(onClick = { settings.unlockApp(pkg) }) {
+                                Text(tr(es, "Desbloquear", "Unlock"), color = Accent)
+                            }
                         }
                     }
                 }

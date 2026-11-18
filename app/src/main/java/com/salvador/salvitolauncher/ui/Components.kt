@@ -2,6 +2,7 @@ package com.salvador.salvitolauncher.ui
 
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -40,6 +41,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -62,6 +64,7 @@ import com.salvador.salvitolauncher.system.storageInfo
 
 class MenuItem(
     val label: String,
+    val icon: ImageBitmap? = null,
     val destructive: Boolean = false,
     val onClick: () -> Unit
 )
@@ -101,15 +104,32 @@ fun GlassMenu(title: String?, items: List<MenuItem>, onDismiss: () -> Unit) {
             }
             items.forEachIndexed { index, item ->
                 if (index > 0 || title != null) MenuSeparator()
-                Text(
-                    text = item.label,
-                    color = if (item.destructive) Color(0xFFFF453A) else Color.White,
-                    fontSize = 16.sp,
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clickable(onClick = item.onClick)
-                        .padding(horizontal = 20.dp, vertical = 14.dp)
-                )
+                        .padding(horizontal = 20.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (item.icon != null) {
+                        Image(
+                            bitmap = item.icon,
+                            contentDescription = null,
+                            modifier = Modifier
+                                .size(22.dp)
+                                .clip(CircleShape)
+                        )
+                        Spacer(Modifier.width(10.dp))
+                    }
+                    Text(
+                        text = item.label,
+                        color = if (item.destructive) Color(0xFFFF453A) else Color.White,
+                        fontSize = 16.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
             }
         }
     }
@@ -134,18 +154,29 @@ fun TopBar(
     wiggle: Boolean,
     battery: BatteryState,
     onDone: () -> Unit,
-    onOpenControlCenter: () -> Unit
+    onOpenControlCenter: () -> Unit,
+    onOpenNotificationCenter: () -> Unit
 ) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .height(40.dp)
             .padding(horizontal = 20.dp)
-            // deslizar hacia abajo desde la barra abre el Centro de Control
+            // deslizar hacia abajo: desde la derecha abre Centro de Control, centro/izquierda abre Notificaciones
             .pointerInput(Unit) {
-                detectVerticalDragGestures { _, amount ->
-                    if (amount > 14f) onOpenControlCenter()
-                }
+                var startX = 0f
+                detectVerticalDragGestures(
+                    onDragStart = { offset -> startX = offset.x },
+                    onVerticalDrag = { _, amount ->
+                        if (amount > 14f) {
+                            if (startX > size.width * 0.65f) {
+                                onOpenControlCenter()
+                            } else {
+                                onOpenNotificationCenter()
+                            }
+                        }
+                    }
+                )
             }
     ) {
         if (wiggle) {

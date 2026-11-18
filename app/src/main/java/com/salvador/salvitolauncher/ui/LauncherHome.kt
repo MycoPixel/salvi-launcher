@@ -74,11 +74,14 @@ import com.salvador.salvitolauncher.data.FolderEntry
 import com.salvador.salvitolauncher.data.HomeLayoutOps
 import com.salvador.salvitolauncher.data.LauncherSettings
 import com.salvador.salvitolauncher.data.WallpaperStorage
+import com.salvador.salvitolauncher.system.AppShortcuts
 import com.salvador.salvitolauncher.system.BadgeState
+import com.salvador.salvitolauncher.system.BiometricHelper
 import com.salvador.salvitolauncher.system.LockAccessibilityService
 import com.salvador.salvitolauncher.system.WidgetEnvironment
 import com.salvador.salvitolauncher.system.launchApp
 import com.salvador.salvitolauncher.system.openAppInfo
+import com.salvador.salvitolauncher.system.openNotificationAccessSettings
 import com.salvador.salvitolauncher.system.openVoiceAssistant
 import com.salvador.salvitolauncher.system.rememberBatteryState
 import com.salvador.salvitolauncher.system.uninstallApp
@@ -111,7 +114,9 @@ fun LauncherHome(settings: LauncherSettings, homeSignal: Int, widgets: WidgetEnv
     val isTablet = with(density) { windowInfo.containerSize.width.toDp() } >= 600.dp
     val columns = if (isTablet) 6 else 4
     val dockSize = if (isTablet) 6 else 4
-    val iconSize = if (isTablet) 68.dp else 60.dp
+    val baseIconSize = if (isTablet) 68.dp else 60.dp
+    val iconSize = if (settings.useLargeIcons) baseIconSize + 10.dp else baseIconSize
+    val showLabels = if (settings.useLargeIcons) false else settings.showLabels
 
     val battery by rememberBatteryState()
     val now by rememberNow()
@@ -141,8 +146,8 @@ fun LauncherHome(settings: LauncherSettings, homeSignal: Int, widgets: WidgetEnv
         onDispose { context.unregisterReceiver(receiver) }
     }
 
-    LaunchedEffect(packageTick) {
-        val loaded = withContext(Dispatchers.IO) { AppRepository.loadApps(context) }
+    LaunchedEffect(packageTick, settings.iconPackPackage) {
+        val loaded = withContext(Dispatchers.IO) { AppRepository.loadApps(context, settings.iconPackPackage) }
         allApps = loaded
         if (settings.dockPackages == null) {
             settings.updateDock(withContext(Dispatchers.IO) { AppRepository.defaultDock(context, loaded) })
@@ -171,6 +176,7 @@ fun LauncherHome(settings: LauncherSettings, homeSignal: Int, widgets: WidgetEnv
     // "cat:<CATEGORIA>" = carpeta de la Biblioteca, "user:<id>" = carpeta creada por el usuario
     var openFolderKey by remember { mutableStateOf<String?>(null) }
     var controlCenterOpen by remember { mutableStateOf(false) }
+    var notificationCenterOpen by remember { mutableStateOf(false) }
     var settingsOpen by remember { mutableStateOf(false) }
     var backgroundMenuOpen by remember { mutableStateOf(false) }
     var menuApp by remember { mutableStateOf<AppInfo?>(null) }
@@ -352,9 +358,24 @@ fun LauncherHome(settings: LauncherSettings, homeSignal: Int, widgets: WidgetEnv
     // ------------------------------------------------------------------ acciones
 
     val openApp: (AppInfo) -> Unit = { app ->
-        if (launchApp(context, app.packageName)) {
-            query = ""
-            openFolderKey = null
+        val activity = context as? androidx.fragment.app.FragmentActivity
+        if (app.packageName in settings.lockedPackages && activity != null) {
+            BiometricHelper.authenticate(
+                activity = activity,
+                title = tr(es, "Abrir ${app.label}", "Open ${app.label}"),
+                subtitle = tr(es, "Se requiere autenticación para abrir esta app", "Authentication required to open app"),
+                onSuccess = {
+                    if (launchApp(context, app.packageName)) {
+                        query = ""
+                        openFolderKey = null
+                    }
+                }
+            )
+        } else {
+            if (launchApp(context, app.packageName)) {
+                query = ""
+                openFolderKey = null
+            }
         }
     }
 
@@ -369,6 +390,7 @@ fun LauncherHome(settings: LauncherSettings, homeSignal: Int, widgets: WidgetEnv
             query = ""
             openFolderKey = null
             controlCenterOpen = false
+            notificationCenterOpen = false
             settingsOpen = false
             backgroundMenuOpen = false
             menuApp = null
@@ -392,6 +414,7 @@ fun LauncherHome(settings: LauncherSettings, homeSignal: Int, widgets: WidgetEnv
             backgroundMenuOpen -> backgroundMenuOpen = false
             settingsOpen -> settingsOpen = false
             controlCenterOpen -> controlCenterOpen = false
+            notificationCenterOpen -> notificationCenterOpen = false
             openFolderKey != null -> openFolderKey = null
             wiggle -> wiggle = false
             query.isNotEmpty() -> query = ""
@@ -401,7 +424,7 @@ fun LauncherHome(settings: LauncherSettings, homeSignal: Int, widgets: WidgetEnv
 
     // El blur se aplica a la capa de ATRÁS (fondo + inicio). Antes se aplicaba al propio overlay,
     // que se desenfocaba a sí mismo y por eso las carpetas "no se veían".
-    val overlayActive = openFolderInfo != null || controlCenterOpen || backgroundMenuOpen ||
+    val overlayActive = openFolderInfo != null || controlCenterOpen || notificationCenterOpen || backgroundMenuOpen ||
         menuApp != null || removeApp != null || menuFolder != null
     val blurRadius by animateDpAsState(if (overlayActive) 28.dp else 0.dp, label = "blur")
 
@@ -446,7 +469,8 @@ fun LauncherHome(settings: LauncherSettings, homeSignal: Int, widgets: WidgetEnv
                     wiggle = wiggle,
                     battery = battery,
                     onDone = { wiggle = false },
-                    onOpenControlCenter = { controlCenterOpen = true }
+                    onOpenControlCenter = { controlCenterOpen = true },
+                    onOpenNotificationCenter = { notificationCenterOpen = true }
                 )
 
                 Column(
@@ -504,6 +528,7 @@ fun LauncherHome(settings: LauncherSettings, homeSignal: Int, widgets: WidgetEnv
                                     apps = apps,
                                     columns = if (isTablet) 3 else 2,
                                     es = es,
+                                    onLaunchApp = openApp,
                                     onFolderClick = { openFolderKey = "cat:${it.name}" }
                                 )
 
@@ -513,9 +538,11 @@ fun LauncherHome(settings: LauncherSettings, homeSignal: Int, widgets: WidgetEnv
                                     isTablet = isTablet,
                                     iconSize = iconSize,
                                     iconTheme = settings.iconTheme,
-                                    showLabels = settings.showLabels,
+                                    showLabels = showLabels,
                                     wiggle = wiggle,
                                     badgeCounts = badgeCounts,
+                                    lockedPackages = settings.lockedPackages,
+                                    customTintColor = settings.customTintColor,
                                     draggingKey = draggingKey,
                                     mergeTargetKey = mergeTargetKey,
                                     onOpenApp = openApp,
@@ -629,12 +656,48 @@ fun LauncherHome(settings: LauncherSettings, homeSignal: Int, widgets: WidgetEnv
             )
         }
 
+        NotificationCenterOverlay(
+            visible = notificationCenterOpen,
+            es = es,
+            onDismiss = { notificationCenterOpen = false },
+            onOpenNotificationAccess = { openNotificationAccessSettings(context) }
+        )
+
         // menú de long-press sobre una app
         menuApp?.let { app ->
             val inDock = app.packageName in dockPackages
             val isHidden = app.packageName in hidden
+            val isLocked = app.packageName in settings.lockedPackages
             val inUserFolder = layout.any { it is FolderEntry && app.packageName in it.packages }
+            val shortcuts = remember(app.packageName) { AppShortcuts.getShortcuts(context, app.packageName) }
+
             val items = buildList {
+                shortcuts.forEach { shortcut ->
+                    add(MenuItem(shortcut.label, icon = shortcut.icon) {
+                        menuApp = null
+                        val activity = context as? androidx.fragment.app.FragmentActivity
+                        if (isLocked && activity != null) {
+                            BiometricHelper.authenticate(
+                                activity,
+                                tr(es, "Ejecutar acceso directo", "Run shortcut"),
+                                onSuccess = { AppShortcuts.launchShortcut(context, shortcut) }
+                            )
+                        } else {
+                            AppShortcuts.launchShortcut(context, shortcut)
+                        }
+                    })
+                }
+                if (isLocked) {
+                    add(MenuItem(tr(es, "Desbloquear app", "Unlock App")) {
+                        settings.unlockApp(app.packageName)
+                        menuApp = null
+                    })
+                } else {
+                    add(MenuItem(tr(es, "Bloquear con Huella/PIN", "Lock with Biometrics")) {
+                        settings.lockApp(app.packageName)
+                        menuApp = null
+                    })
+                }
                 add(MenuItem(tr(es, "Editar pantalla de inicio", "Edit Home Screen")) {
                     wiggle = true
                     menuApp = null

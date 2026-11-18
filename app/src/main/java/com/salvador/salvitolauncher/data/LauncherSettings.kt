@@ -25,6 +25,9 @@ class LauncherSettings(context: Context) {
     var iconTheme by mutableStateOf(readEnum(KEY_ICON_THEME, AppIconTheme.DEFAULT))
         private set
 
+    var iconPackPackage: String? by mutableStateOf(prefs.getString(KEY_ICON_PACK, null))
+        private set
+
     var wallpaperMode by mutableStateOf(readEnum(KEY_WALLPAPER_MODE, WallpaperMode.GRADIENT))
         private set
 
@@ -44,6 +47,17 @@ class LauncherSettings(context: Context) {
     var hiddenPackages: Set<String> by mutableStateOf(
         prefs.getStringSet(KEY_HIDDEN, emptySet())?.toSet() ?: emptySet()
     )
+        private set
+
+    var lockedPackages: Set<String> by mutableStateOf(
+        prefs.getStringSet(KEY_LOCKED, emptySet())?.toSet() ?: emptySet()
+    )
+        private set
+
+    var customTintColor: Long by mutableStateOf(prefs.getLong(KEY_TINT_COLOR, 0xFF3B82F6L))
+        private set
+
+    var useLargeIcons by mutableStateOf(prefs.getBoolean(KEY_LARGE_ICONS, false))
         private set
 
     var customLabels: Map<String, String> by mutableStateOf(readLabels())
@@ -117,6 +131,11 @@ class LauncherSettings(context: Context) {
         prefs.edit { putString(KEY_ICON_THEME, value.name) }
     }
 
+    fun updateIconPackPackage(value: String?) {
+        iconPackPackage = value
+        prefs.edit { putString(KEY_ICON_PACK, value) }
+    }
+
     fun selectGradient(index: Int) {
         wallpaperMode = WallpaperMode.GRADIENT
         gradientIndex = index
@@ -163,6 +182,26 @@ class LauncherSettings(context: Context) {
     fun unhideAll() {
         hiddenPackages = emptySet()
         prefs.edit { putStringSet(KEY_HIDDEN, emptySet()) }
+    }
+
+    fun lockApp(packageName: String) {
+        lockedPackages = lockedPackages + packageName
+        prefs.edit { putStringSet(KEY_LOCKED, lockedPackages.toSet()) }
+    }
+
+    fun unlockApp(packageName: String) {
+        lockedPackages = lockedPackages - packageName
+        prefs.edit { putStringSet(KEY_LOCKED, lockedPackages.toSet()) }
+    }
+
+    fun updateCustomTintColor(color: Long) {
+        customTintColor = color
+        prefs.edit { putLong(KEY_TINT_COLOR, color) }
+    }
+
+    fun updateUseLargeIcons(value: Boolean) {
+        useLargeIcons = value
+        prefs.edit { putBoolean(KEY_LARGE_ICONS, value) }
     }
 
     fun rename(packageName: String, label: String) {
@@ -215,12 +254,16 @@ class LauncherSettings(context: Context) {
     private companion object {
         const val KEY_SPANISH = "spanish"
         const val KEY_ICON_THEME = "icon_theme"
+        const val KEY_ICON_PACK = "icon_pack_package"
         const val KEY_WALLPAPER_MODE = "wallpaper_mode"
         const val KEY_GRADIENT = "gradient_index"
         const val KEY_WALLPAPER_VERSION = "wallpaper_version"
         const val KEY_SHOW_LABELS = "show_labels"
         const val KEY_SHOW_ISLAND = "show_island"
         const val KEY_HIDDEN = "hidden_packages"
+        const val KEY_LOCKED = "locked_packages"
+        const val KEY_TINT_COLOR = "custom_tint_color"
+        const val KEY_LARGE_ICONS = "use_large_icons"
         const val KEY_CUSTOM_LABELS = "custom_labels"
         const val KEY_DOCK = "dock_packages"
         const val KEY_LAYOUT = "home_layout"

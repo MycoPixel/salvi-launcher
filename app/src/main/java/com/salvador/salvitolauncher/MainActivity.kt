@@ -4,10 +4,10 @@ import android.appwidget.AppWidgetHost
 import android.appwidget.AppWidgetManager
 import android.content.Intent
 import android.os.Bundle
-import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.fragment.app.FragmentActivity
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.setValue
@@ -17,7 +17,7 @@ import com.salvador.salvitolauncher.system.WidgetEnvironment
 import com.salvador.salvitolauncher.ui.LauncherHome
 import com.salvador.salvitolauncher.ui.theme.SalvitoLauncherTheme
 
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
 
     /** Sube cada vez que se pulsa Home con el launcher ya abierto (singleTask => onNewIntent). */
     private var homeSignal by mutableIntStateOf(0)
