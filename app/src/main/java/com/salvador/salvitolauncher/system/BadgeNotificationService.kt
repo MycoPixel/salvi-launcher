@@ -110,11 +110,10 @@ fun openNotificationItem(item: NotificationItem, context: android.content.Contex
         try {
             item.contentIntent.send()
         } catch (_: Exception) {
-            launchApp(context, item.packageName)
         }
-    } else {
-        launchApp(context, item.packageName)
     }
+    launchApp(context, item.packageName)
+    dismissNotificationItem(item.key)
 }
 
 fun dismissNotificationItem(key: String) {

@@ -80,8 +80,7 @@ fun NotificationCenterOverlay(
                     .statusBarsPadding()
                     .padding(top = 12.dp, start = 16.dp, end = 16.dp)
                     .widthIn(max = 420.dp)
-                    .fillMaxWidth()
-                    .pointerInput(Unit) { detectTapGestures { } },
+                    .fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Row(
